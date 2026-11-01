@@ -1,0 +1,31 @@
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: icsee-go2rtc
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./go2rtc.generated.yaml:/config/go2rtc.yaml
+
+  app:
+    build: ./app
+    container_name: icsee-nvr
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: America/Sao_Paulo
+      DATABASE_URL: sqlite:////data/nvr.db
+      DEFAULT_STORAGE_PATH: /recordings
+      GO2RTC_CONFIG_PATH: /home/nestertec/Documentos/projects/icsee/go2rtc.generated.yaml
+      GO2RTC_API: http://127.0.0.1:1984
+      GO2RTC_PUBLIC_URL: http://127.0.0.1:1984
+    volumes:
+      - ./app/data:/data
+      - ./recordings:/recordings
+      - ./go2rtc.generated.yaml:/home/nestertec/Documentos/projects/icsee/go2rtc.generated.yaml
+    depends_on:
+      - go2rtc

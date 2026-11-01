@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Gravações — ICSEE NVR{% endblock %}
+{% block content %}
+<h1>Gravações</h1>
+<div class="card">
+  <form method="get" class="row">
+    <div>
+      <label>Câmera</label>
+      <select name="camera_id">
+        <option value="">Todas</option>
+        {% for c in cameras %}
+        <option value="{{ c.id }}" {% if camera_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>A partir de</label>
+      <input type="date" name="date" value="{{ date }}">
+    </div>
+    <div style="align-self:end"><button type="submit">Filtrar</button></div>
+  </form>
+</div>
+<div class="card">
+  <table>
+    <thead><tr><th>Início</th><th>Câmera</th><th>Tamanho</th><th></th></tr></thead>
+    <tbody>
+    {% for s in segments %}
+      <tr>
+        <td>{{ s.started_at }}</td>
+        <td>{{ s.camera_id }}</td>
+        <td>{{ '%.1f'|format(s.size_bytes / 1048576) }} MB</td>
+        <td class="row">
+          <a class="btn btn-secondary" href="/recordings/{{ s.id }}/file" target="_blank">Abrir / baixar</a>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="4">
+          <video controls preload="metadata" style="width:100%;max-height:240px" src="/recordings/{{ s.id }}/file"></video>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">Nenhuma gravação ainda.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

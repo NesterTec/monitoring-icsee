@@ -1,0 +1,75 @@
+:root {
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e7ecf3;
+  --muted: #8b9bb4;
+  --accent: #3d9cf0;
+  --danger: #e35d6a;
+  --ok: #3ecf8e;
+  --border: #2a3548;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: var(--accent); text-decoration: none; }
+header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+header nav { display: flex; gap: 1rem; flex: 1; }
+header .brand { font-weight: 700; }
+main { padding: 1.25rem; max-width: 1200px; margin: 0 auto; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+label { display: block; margin: 0.5rem 0 0.25rem; color: var(--muted); font-size: 0.9rem; }
+input, select, button, textarea {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #121a26;
+  color: var(--text);
+}
+button, .btn {
+  display: inline-block;
+  width: auto;
+  background: var(--accent);
+  border: none;
+  color: #041018;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+}
+.btn-danger { background: var(--danger); color: white; }
+.btn-secondary { background: #2a3548; color: var(--text); }
+.row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.error { color: var(--danger); }
+.ok { color: var(--ok); }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+.login-wrap { max-width: 400px; margin: 4rem auto; }
+iframe.live {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}
+.muted { color: var(--muted); font-size: 0.9rem; }
+.checkbox { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+.checkbox input { width: auto; }

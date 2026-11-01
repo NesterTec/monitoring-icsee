@@ -1,0 +1,13 @@
+.env
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+recordings/**
+!recordings/.gitkeep
+app/data/
+*.db
+go2rtc.generated.yaml
+.idea/
+*.pyc
+.DS_Store

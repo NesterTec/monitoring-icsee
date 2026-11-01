@@ -1,0 +1,1 @@
+"""ICSEE local NVR application."""

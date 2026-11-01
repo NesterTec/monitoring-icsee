@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ICSEE NVR{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{% if user is defined and user %}
+<header>
+  <div class="brand">ICSEE NVR</div>
+  <nav>
+    <a href="/">Live</a>
+    <a href="/cameras">Câmeras</a>
+    <a href="/recordings">Gravações</a>
+    <a href="/settings">Configurações</a>
+  </nav>
+  <form method="post" action="/logout"><button class="btn-secondary" type="submit">Sair</button></form>
+</header>
+{% endif %}
+<main>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

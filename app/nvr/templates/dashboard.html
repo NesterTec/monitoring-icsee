@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Live — ICSEE NVR{% endblock %}
+{% block content %}
+<h1>Live</h1>
+{% if not cameras %}
+<p class="muted">Nenhuma câmera ativa. <a href="/cameras/new">Adicionar câmera</a></p>
+{% else %}
+<div class="grid">
+  {% for cam in cameras %}
+  <div class="card">
+    <h3>{{ cam.name }}</h3>
+    <p class="muted">{{ cam.host }} · stream cam_{{ cam.id }}</p>
+    <iframe class="live" src="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}" allow="autoplay"></iframe>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

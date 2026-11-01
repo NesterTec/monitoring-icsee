@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Câmeras — ICSEE NVR{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between;margin-bottom:1rem">
+  <h1>Câmeras</h1>
+  <a class="btn" href="/cameras/new">Nova câmera</a>
+</div>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Nome</th><th>IP</th><th>User</th><th>Grava</th><th>Ativa</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for cam in cameras %}
+      <tr>
+        <td>{{ cam.name }}</td>
+        <td>{{ cam.host }}:{{ cam.rtsp_port }}</td>
+        <td>{{ cam.username }}</td>
+        <td>{{ "sim" if cam.recording_enabled else "não" }}</td>
+        <td>{{ "sim" if cam.enabled else "não" }}</td>
+        <td class="row">
+          <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
+          <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
+          <form method="post" action="/cameras/{{ cam.id }}/delete" onsubmit="return confirm('Remover?')">
+            <button class="btn-danger" type="submit">Excluir</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Nenhuma câmera cadastrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<pre id="test-out" class="muted"></pre>
+<script>
+async function testCam(id) {
+  const out = document.getElementById('test-out');
+  out.textContent = 'Testando...';
+  const r = await fetch('/cameras/' + id + '/test', { method: 'POST' });
+  const j = await r.json();
+  out.textContent = (j.ok ? 'OK: ' : 'Falha: ') + j.detail;
+}
+</script>
+{% endblock %}

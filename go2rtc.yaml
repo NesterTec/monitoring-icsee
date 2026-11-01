@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/www/schema.json
+
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+
+log:
+  level: info
+
+streams:
+  # Câmera(s) com ahkn/ar2aha — H265; ffmpeg gera H264 para Chrome
+  cam10:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.10:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=1.sdp?
+    - ffmpeg:cam10#video=h264#hardware
+  cam10_hd:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.10:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=0.sdp?
+    - ffmpeg:cam10_hd#video=h264#hardware
+
+  cam15:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.15:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=1.sdp?
+    - ffmpeg:cam15#video=h264#hardware
+  cam15_hd:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.15:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=0.sdp?
+    - ffmpeg:cam15_hd#video=h264#hardware
+
+  # Outras câmeras (senhas diferentes — preencher quando tiver)
+  cam5:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.5:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=1.sdp?
+  cam6:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.6:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=1.sdp?
+  cam7:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.1.7:554/user=${CAMERA_USER}&password=${CAMERA_PASSWORD}&channel=1&stream=1.sdp?
