@@ -27,12 +27,16 @@ def app_env(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def client(app_env):
+    from nvr.camera_monitor import camera_monitor
     from nvr.db import init_db
     from nvr.main import create_app
 
+    camera_monitor.enabled = False
+    camera_monitor.stop()
     init_db()
     with TestClient(create_app()) as c:
         yield c
+    camera_monitor.stop()
 
 
 @pytest.fixture()

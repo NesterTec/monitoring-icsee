@@ -737,3 +737,78 @@ body.modal-open { overflow: hidden; }
   margin-top: 1.15rem;
 }
 .modal-actions form { margin: 0; }
+
+.notif-wrap {
+  position: relative;
+  margin-left: 0.35rem;
+}
+.notif-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.notif-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  width: min(320px, 88vw);
+  max-height: 50vh;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 40;
+  padding: 0.55rem;
+}
+.notif-empty {
+  margin: 0.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notif-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  padding: 0.65rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.notif-item:hover { background: var(--accent-soft); }
+
+@media (max-width: 899px) {
+  .notif-wrap { margin-left: auto; margin-right: 0.35rem; }
+}

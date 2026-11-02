@@ -23,11 +23,12 @@ def test_move_camera_changes_live_order(auth_client):
         a = _add_cam(db, "A", 0)
         b = _add_cam(db, "B", 1)
         c = _add_cam(db, "C", 2)
+        a_id, b_id, c_id = a.id, b.id, c.id
     finally:
         db.close()
 
     r = auth_client.post(
-        f"/cameras/{b.id}/move",
+        f"/cameras/{b_id}/move",
         data={"direction": "up"},
         follow_redirects=False,
     )
@@ -37,6 +38,6 @@ def test_move_camera_changes_live_order(auth_client):
     try:
         ordered = [cam.name for cam in db.query(Camera).order_by(Camera.sort_order, Camera.id).all()]
         assert ordered == ["B", "A", "C"]
-        assert {a.id, b.id, c.id} == {cam.id for cam in db.query(Camera).all()}
+        assert {a_id, b_id, c_id} == {cam.id for cam in db.query(Camera).all()}
     finally:
         db.close()

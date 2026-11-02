@@ -31,12 +31,16 @@ def guess_default_cidr() -> str:
     return "192.168.1.0/24"
 
 
-def _tcp_open(host: str, port: int, timeout: float) -> bool:
+def tcp_open(host: str, port: int, timeout: float) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:
         return False
+
+
+# Back-compat alias
+_tcp_open = tcp_open
 
 
 def scan_rtsp_hosts(
@@ -51,7 +55,7 @@ def scan_rtsp_hosts(
     hosts = [str(ip) for ip in network.hosts()]
     found: list[str] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_tcp_open, host, port, timeout): host for host in hosts}
+        futures = {pool.submit(tcp_open, host, port, timeout): host for host in hosts}
         for fut in as_completed(futures):
             host = futures[fut]
             try:

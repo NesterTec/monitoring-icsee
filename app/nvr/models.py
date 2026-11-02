@@ -30,8 +30,16 @@ class Camera(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     dashboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    reachability_status: Mapped[str] = mapped_column(String(32), default="ok")
+    fail_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_scan_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     segments: Mapped[list["RecordingSegment"]] = relationship(
+        back_populates="camera",
+        cascade="all, delete-orphan",
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
         back_populates="camera",
         cascade="all, delete-orphan",
     )
@@ -42,6 +50,19 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    camera_id: Mapped[int] = mapped_column(ForeignKey("cameras.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    camera: Mapped[Camera] = relationship(back_populates="notifications")
 
 
 class RecordingSegment(Base):

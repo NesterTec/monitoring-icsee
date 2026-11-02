@@ -10,6 +10,7 @@ from nvr.auth import seed_admin
 from nvr.config import get_settings
 import nvr.db as db_module
 from nvr.db import init_db
+from nvr.camera_monitor import camera_monitor
 from nvr.go2rtc_sync import sync_go2rtc
 from nvr.recorder import recorder_manager
 from nvr.routers.web import router as web_router
@@ -29,9 +30,11 @@ async def lifespan(app: FastAPI):
         sync_go2rtc(db)
         recorder_manager.start_background()
         recorder_manager.reconcile(db)
+        camera_monitor.start_background()
     finally:
         db.close()
     yield
+    camera_monitor.stop()
     recorder_manager.stop_all()
 
 

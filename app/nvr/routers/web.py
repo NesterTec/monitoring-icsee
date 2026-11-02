@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 from nvr.auth import authenticate, require_user, seed_admin
 from nvr.config import get_settings
 from nvr.db import get_db
-from nvr.discover import auth_probe_hosts, guess_default_cidr, scan_rtsp_hosts
+from nvr.camera_monitor import rediscover_camera
+from nvr.discover import auth_probe_hosts, guess_default_cidr, probe_rtsp_auth, scan_rtsp_hosts
 from nvr.go2rtc_sync import sync_go2rtc
 from nvr.models import Camera, RecordingSegment, User
+from nvr.notifications import list_active
 from nvr.quota import dir_size, free_bytes
 from nvr.recorder import recorder_manager, segment_dir
 from nvr.rtsp import build_rtsp_url, probe_rtsp
@@ -306,6 +308,103 @@ def cameras_test(camera_id: int, request: Request, db: Session = Depends(get_db)
     url = build_rtsp_url(cam.host, cam.rtsp_port, cam.username, password, cam.channel, cam.stream_sub)
     ok, detail = probe_rtsp(url)
     return {"ok": ok, "detail": detail}
+
+
+@router.get("/notifications")
+def notifications_list(request: Request, db: Session = Depends(get_db)):
+    require_user(request, db)
+    items = list_active(db)
+    return {
+        "items": [
+            {
+                "id": n.id,
+                "camera_id": n.camera_id,
+                "kind": n.kind,
+                "message": n.message,
+                "created_at": n.created_at.isoformat(timespec="seconds"),
+            }
+            for n in items
+        ]
+    }
+
+
+@router.post("/cameras/{camera_id}/retry-reachability")
+def cameras_retry_reachability(camera_id: int, request: Request, db: Session = Depends(get_db)):
+    require_user(request, db)
+    cam = db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(404)
+    result = rediscover_camera(db, cam, force=True)
+    if result == "updated":
+        sync_go2rtc(db)
+        recorder_manager.reconcile(db)
+    db.refresh(cam)
+    return {
+        "ok": result == "updated",
+        "result": result,
+        "host": cam.host,
+        "reachability_status": cam.reachability_status,
+    }
+
+
+@router.post("/cameras/{camera_id}/replace")
+async def cameras_replace(camera_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _user_or_redirect(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    cam = db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(404)
+    form = await request.form()
+    host = str(form.get("host") or "").strip()
+    username = str(form.get("username") or "").strip()
+    password = str(form.get("password") or "")
+    rtsp_port = int(form.get("rtsp_port") or cam.rtsp_port or 554)
+    channel = int(form.get("channel") or cam.channel or 1)
+    stream_sub = int(form.get("stream_sub") or cam.stream_sub or 1)
+    if not host or not username or not password:
+        return templates.TemplateResponse(
+            request,
+            "camera_form.html",
+            {
+                "user": user,
+                "camera": cam,
+                "error": "Informe host, usuário e senha da nova câmera.",
+                "default_cidr": guess_default_cidr(),
+            },
+            status_code=400,
+        )
+    ok, detail = probe_rtsp_auth(host, username, password, port=rtsp_port, channel=channel, stream=stream_sub)
+    if not ok:
+        return templates.TemplateResponse(
+            request,
+            "camera_form.html",
+            {
+                "user": user,
+                "camera": cam,
+                "error": f"Falha ao autenticar no novo dispositivo: {detail}",
+                "default_cidr": guess_default_cidr(),
+            },
+            status_code=400,
+        )
+    cam.host = host
+    cam.username = username
+    cam.password_enc = encrypt_secret(password)
+    cam.rtsp_port = rtsp_port
+    cam.channel = channel
+    cam.stream_sub = stream_sub
+    if form.get("stream_main") is not None and str(form.get("stream_main")).strip() != "":
+        cam.stream_main = int(form.get("stream_main"))
+    cam.fail_count = 0
+    cam.reachability_status = "ok"
+    cam.last_seen_at = datetime.now()
+    db.commit()
+    from nvr.notifications import clear_camera_lost
+
+    clear_camera_lost(db, cam.id)
+    sync_go2rtc(db)
+    recorder_manager.reconcile(db)
+    return RedirectResponse("/cameras", status_code=303)
 
 
 def _recording_presets():

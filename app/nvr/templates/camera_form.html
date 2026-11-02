@@ -58,8 +58,75 @@
         <a class="btn btn-secondary" href="/cameras">Cancelar</a>
       </p>
     </form>
+
+    {% if camera %}
+    <div class="reachability-actions" style="margin-top:1.25rem">
+      <p class="muted" style="margin:0 0 0.5rem">
+        Status de alcance:
+        <strong id="reachability-status">{{ camera.reachability_status or 'ok' }}</strong>
+        {% if camera.host %} · IP atual {{ camera.host }}{% endif %}
+      </p>
+      <p class="row">
+        <button type="button" class="btn-secondary" id="retry-reachability-btn">Tentar novamente</button>
+      </p>
+      <p class="muted" id="retry-reachability-status"></p>
+    </div>
+
+    <div class="card form-narrow" style="margin-top:1rem">
+      <h2>Substituir dispositivo</h2>
+      <p class="muted">Mantém nome, ordem e gravações. Atualiza IP e credenciais da câmera nova.</p>
+      <form method="post" action="/cameras/{{ camera.id }}/replace">
+        <label>IP / host novo</label>
+        <input name="host" required placeholder="192.168.1.20">
+        <label>Usuário novo</label>
+        <input name="username" required autocomplete="username">
+        <label>Senha nova</label>
+        <input name="password" type="password" required autocomplete="new-password">
+        <input type="hidden" name="rtsp_port" value="{{ camera.rtsp_port }}">
+        <input type="hidden" name="channel" value="{{ camera.channel }}">
+        <input type="hidden" name="stream_sub" value="{{ camera.stream_sub }}">
+        <input type="hidden" name="stream_main" value="{{ camera.stream_main }}">
+        <p style="margin-top:1rem">
+          <button type="submit">Substituir e validar</button>
+        </p>
+      </form>
+    </div>
+    {% endif %}
   </div>
 </div>
+
+{% if camera %}
+<script>
+(function () {
+  const btn = document.getElementById('retry-reachability-btn');
+  const status = document.getElementById('retry-reachability-status');
+  const reach = document.getElementById('reachability-status');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    if (status) status.textContent = 'Procurando na rede…';
+    try {
+      const r = await fetch('/cameras/{{ camera.id }}/retry-reachability', { method: 'POST' });
+      const data = await r.json();
+      if (reach) reach.textContent = data.reachability_status || '';
+      if (data.ok) {
+        if (status) status.textContent = 'Encontrada em ' + data.host;
+        const hostField = document.getElementById('field-host');
+        if (hostField) hostField.value = data.host;
+      } else if (data.result === 'lost') {
+        if (status) status.textContent = 'Ainda perdida — nenhum dispositivo autenticou.';
+      } else {
+        if (status) status.textContent = 'Sem alteração (' + (data.result || 'erro') + ').';
+      }
+    } catch (e) {
+      if (status) status.textContent = 'Falha ao tentar novamente.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endif %}
 
 {% if not camera %}
 <script>

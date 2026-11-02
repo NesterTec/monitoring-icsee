@@ -55,6 +55,19 @@ def _migrate_sqlite(eng) -> None:
                     "UPDATE cameras SET sort_order = ? WHERE id = ?",
                     (idx, row[0]),
                 )
+        cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(cameras)").fetchall()}
+        if "reachability_status" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE cameras ADD COLUMN reachability_status VARCHAR(32) NOT NULL DEFAULT 'ok'"
+            )
+        if "fail_count" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE cameras ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0"
+            )
+        if "last_seen_at" not in cols:
+            conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN last_seen_at DATETIME")
+        if "last_scan_at" not in cols:
+            conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN last_scan_at DATETIME")
 
 
 def get_db() -> Generator[Session, None, None]:
