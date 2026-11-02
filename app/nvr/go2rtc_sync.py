@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 import yaml
 from sqlalchemy.orm import Session
@@ -7,6 +9,8 @@ from nvr.config import get_settings
 from nvr.models import Camera
 from nvr.rtsp import build_rtsp_url
 from nvr.security import decrypt_secret
+
+logger = logging.getLogger(__name__)
 
 
 def sync_go2rtc(db: Session) -> Path:
@@ -32,4 +36,17 @@ def sync_go2rtc(db: Session) -> Path:
         "streams": streams,
     }
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _reload_go2rtc(settings.go2rtc_api)
     return path
+
+
+def _reload_go2rtc(api_base: str) -> None:
+    """Ask go2rtc to reload config so IP/credential changes take effect immediately."""
+    url = api_base.rstrip("/") + "/api/restart"
+    try:
+        req = Request(url, method="POST", data=b"")
+        with urlopen(req, timeout=5) as resp:
+            resp.read()
+        logger.info("go2rtc reload requested via %s", url)
+    except Exception as exc:
+        logger.warning("go2rtc reload failed (%s): %s", url, exc)

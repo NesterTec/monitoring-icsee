@@ -1,0 +1,5 @@
+version: "3"
+tunnels:
+  nvr:
+    proto: http
+    addr: 8090

@@ -1,3 +1,4 @@
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -9,16 +10,29 @@ from sqlalchemy.orm import Session
 from nvr.auth import authenticate, require_user, seed_admin
 from nvr.config import get_settings
 from nvr.db import get_db
+from nvr.discover import auth_probe_hosts, guess_default_cidr, scan_rtsp_hosts
 from nvr.go2rtc_sync import sync_go2rtc
 from nvr.models import Camera, RecordingSegment, User
 from nvr.quota import dir_size, free_bytes
-from nvr.recorder import recorder_manager
+from nvr.recorder import recorder_manager, segment_dir
 from nvr.rtsp import build_rtsp_url, probe_rtsp
 from nvr.security import decrypt_secret, encrypt_secret
 from nvr.settings_service import get_quota_gb, get_storage_path, set_quota_gb, set_storage_path
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 router = APIRouter()
+
+
+def _cameras_ordered(db: Session, *, only_live: bool = False) -> list[Camera]:
+    q = db.query(Camera)
+    if only_live:
+        q = q.filter(Camera.enabled.is_(True), Camera.dashboard_visible.is_(True))
+    return q.order_by(Camera.sort_order.asc(), Camera.id.asc()).all()
+
+
+def _next_sort_order(db: Session) -> int:
+    current = db.query(Camera).order_by(Camera.sort_order.desc(), Camera.id.desc()).first()
+    return (current.sort_order + 1) if current is not None else 0
 
 
 def _user_or_redirect(request: Request, db: Session) -> User | RedirectResponse:
@@ -64,11 +78,26 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    cameras = db.query(Camera).filter(Camera.enabled.is_(True)).order_by(Camera.name).all()
+    cameras = _cameras_ordered(db, only_live=True)
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {"user": user, "cameras": cameras, "go2rtc_public": get_settings().go2rtc_public_url},
+    )
+
+
+@router.get("/live/{camera_id}/fullscreen", response_class=HTMLResponse)
+def live_fullscreen(camera_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _user_or_redirect(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    cam = db.get(Camera, camera_id)
+    if cam is None or not cam.enabled:
+        raise HTTPException(404)
+    return templates.TemplateResponse(
+        request,
+        "live_fullscreen.html",
+        {"user": user, "camera": cam, "go2rtc_public": get_settings().go2rtc_public_url},
     )
 
 
@@ -77,7 +106,7 @@ def cameras_list(request: Request, db: Session = Depends(get_db)):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    cameras = db.query(Camera).order_by(Camera.name).all()
+    cameras = _cameras_ordered(db)
     return templates.TemplateResponse(request, "cameras.html", {"user": user, "cameras": cameras})
 
 
@@ -86,7 +115,56 @@ def cameras_new(request: Request, db: Session = Depends(get_db)):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    return templates.TemplateResponse(request, "camera_form.html", {"user": user, "camera": None, "error": None})
+    return templates.TemplateResponse(
+        request,
+        "camera_form.html",
+        {
+            "user": user,
+            "camera": None,
+            "error": None,
+            "default_cidr": guess_default_cidr(),
+        },
+    )
+
+
+@router.post("/cameras/discover/scan")
+async def cameras_discover_scan(request: Request, db: Session = Depends(get_db)):
+    require_user(request, db)
+    payload = await request.json()
+    cidr = str(payload.get("cidr") or guess_default_cidr()).strip()
+    port = int(payload.get("port") or 554)
+    try:
+        hosts = scan_rtsp_hosts(cidr, port=port)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+    existing = {c.host for c in db.query(Camera).all()}
+    return {
+        "cidr": cidr,
+        "port": port,
+        "hosts": [
+            {"host": h, "registered": h in existing}
+            for h in hosts
+        ],
+    }
+
+
+@router.post("/cameras/discover/auth")
+async def cameras_discover_auth(request: Request, db: Session = Depends(get_db)):
+    require_user(request, db)
+    payload = await request.json()
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    port = int(payload.get("port") or 554)
+    hosts = [str(h).strip() for h in (payload.get("hosts") or []) if str(h).strip()]
+    if not username or not password:
+        raise HTTPException(400, detail="Informe usuário e senha do dispositivo")
+    if not hosts:
+        raise HTTPException(400, detail="Nenhum IP para testar — rode a varredura antes")
+    if len(hosts) > 64:
+        raise HTTPException(400, detail="Muitos hosts (máx. 64)")
+    results = auth_probe_hosts(hosts, username, password, port=port)
+    matches = [r for r in results if r["ok"]]
+    return {"matches": matches, "tried": len(results), "results": results}
 
 
 @router.post("/cameras/create")
@@ -107,6 +185,8 @@ async def cameras_create(request: Request, db: Session = Depends(get_db)):
         stream_main=int(form.get("stream_main") or 0),
         recording_enabled=form.get("recording_enabled") == "on",
         enabled=form.get("enabled") == "on",
+        dashboard_visible=form.get("dashboard_visible") == "on",
+        sort_order=_next_sort_order(db),
     )
     db.add(cam)
     db.commit()
@@ -123,7 +203,11 @@ def cameras_edit(camera_id: int, request: Request, db: Session = Depends(get_db)
     cam = db.get(Camera, camera_id)
     if cam is None:
         raise HTTPException(404)
-    return templates.TemplateResponse(request, "camera_form.html", {"user": user, "camera": cam, "error": None})
+    return templates.TemplateResponse(
+        request,
+        "camera_form.html",
+        {"user": user, "camera": cam, "error": None, "default_cidr": guess_default_cidr()},
+    )
 
 
 @router.post("/cameras/{camera_id}")
@@ -147,9 +231,48 @@ async def cameras_update(camera_id: int, request: Request, db: Session = Depends
     cam.stream_main = int(form.get("stream_main") or cam.stream_main)
     cam.recording_enabled = form.get("recording_enabled") == "on"
     cam.enabled = form.get("enabled") == "on"
+    cam.dashboard_visible = form.get("dashboard_visible") == "on"
     db.commit()
     sync_go2rtc(db)
     recorder_manager.reconcile(db)
+    return RedirectResponse("/cameras", status_code=303)
+
+
+@router.post("/cameras/{camera_id}/toggle-dashboard")
+def cameras_toggle_dashboard(camera_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _user_or_redirect(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    cam = db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(404)
+    cam.dashboard_visible = not bool(cam.dashboard_visible)
+    db.commit()
+    return RedirectResponse("/cameras", status_code=303)
+
+
+@router.post("/cameras/{camera_id}/move")
+async def cameras_move(camera_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _user_or_redirect(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    cam = db.get(Camera, camera_id)
+    if cam is None:
+        raise HTTPException(404)
+    form = await request.form()
+    direction = str(form.get("direction") or "").strip().lower()
+    cameras = _cameras_ordered(db)
+    idx = next((i for i, c in enumerate(cameras) if c.id == cam.id), None)
+    if idx is None:
+        return RedirectResponse("/cameras", status_code=303)
+    if direction == "up" and idx > 0:
+        other = cameras[idx - 1]
+    elif direction == "down" and idx < len(cameras) - 1:
+        other = cameras[idx + 1]
+    else:
+        return RedirectResponse("/cameras", status_code=303)
+    cam.sort_order, other.sort_order = other.sort_order, cam.sort_order
+    db.commit()
     return RedirectResponse("/cameras", status_code=303)
 
 
@@ -160,8 +283,14 @@ def cameras_delete(camera_id: int, request: Request, db: Session = Depends(get_d
         return user
     cam = db.get(Camera, camera_id)
     if cam:
+        storage = get_storage_path(db)
+        cam_dir = segment_dir(storage, cam.id)
+        # Stop ffmpeg first so files are not locked / re-registered.
+        recorder_manager.stop_camera(cam.id)
+        db.query(RecordingSegment).filter(RecordingSegment.camera_id == cam.id).delete()
         db.delete(cam)
         db.commit()
+        shutil.rmtree(cam_dir, ignore_errors=True)
         sync_go2rtc(db)
         recorder_manager.reconcile(db)
     return RedirectResponse("/cameras", status_code=303)
@@ -179,28 +308,87 @@ def cameras_test(camera_id: int, request: Request, db: Session = Depends(get_db)
     return {"ok": ok, "detail": detail}
 
 
+def _recording_presets():
+    from datetime import timedelta
+
+    return {
+        "30m": ("Últimos 30 min", timedelta(minutes=30)),
+        "1h": ("Última hora", timedelta(hours=1)),
+        "6h": ("Últimas 6 horas", timedelta(hours=6)),
+        "24h": ("Últimas 24 horas", timedelta(hours=24)),
+        "7d": ("Últimos 7 dias", timedelta(days=7)),
+        "30d": ("Último mês", timedelta(days=30)),
+    }
+
+
 @router.get("/recordings", response_class=HTMLResponse)
 def recordings_list(
     request: Request,
     camera_id: int | None = None,
-    date: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    preset: str | None = None,
     db: Session = Depends(get_db),
 ):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    q = db.query(RecordingSegment).order_by(RecordingSegment.started_at.desc())
-    if camera_id:
-        q = q.filter(RecordingSegment.camera_id == camera_id)
-    if date:
-        day = datetime.strptime(date, "%Y-%m-%d")
-        q = q.filter(RecordingSegment.started_at >= day)
-    segments = q.limit(200).all()
-    cameras = db.query(Camera).order_by(Camera.name).all()
+    cameras = _cameras_ordered(db)
+    presets = _recording_presets()
+    segments: list[RecordingSegment] = []
+    error = None
+    range_label = None
+    use_preset = bool(preset and preset in presets)
+    use_custom = bool(date_from and date_to)
+    searched = bool(camera_id and (use_preset or use_custom))
+
+    if searched:
+        try:
+            now = datetime.now()
+            if use_preset:
+                _label, delta = presets[preset]
+                start = now - delta
+                end = now
+                range_label = _label
+            else:
+                start = datetime.strptime(date_from, "%Y-%m-%d")
+                end = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                if end < start:
+                    raise ValueError("A data final deve ser maior ou igual à data inicial.")
+                range_label = f"{date_from} → {date_to}"
+            segments = (
+                db.query(RecordingSegment)
+                .filter(
+                    RecordingSegment.camera_id == camera_id,
+                    RecordingSegment.started_at >= start,
+                    RecordingSegment.started_at <= end,
+                )
+                .order_by(RecordingSegment.started_at.desc())
+                .limit(300)
+                .all()
+            )
+        except ValueError as exc:
+            error = str(exc)
+            searched = False
+    elif camera_id and not use_preset and not use_custom:
+        error = "Escolha um período rápido ou informe as datas De/Até."
+
     return templates.TemplateResponse(
         request,
         "recordings.html",
-        {"user": user, "segments": segments, "cameras": cameras, "camera_id": camera_id, "date": date or ""},
+        {
+            "user": user,
+            "segments": segments,
+            "cameras": cameras,
+            "camera_id": camera_id,
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "preset": preset or "",
+            "presets": presets,
+            "searched": searched,
+            "range_label": range_label,
+            "error": error,
+        },
     )
 
 
@@ -210,6 +398,13 @@ def recordings_file(segment_id: int, request: Request, db: Session = Depends(get
     seg = db.get(RecordingSegment, segment_id)
     if seg is None or not Path(seg.path).is_file():
         raise HTTPException(404, "segment not found")
+    from nvr.recorder import is_playable_mp4
+
+    if not is_playable_mp4(Path(seg.path)):
+        raise HTTPException(
+            409,
+            "Arquivo incompleto (gravação interrompida). Esse segmento será removido automaticamente.",
+        )
     return FileResponse(seg.path, media_type="video/mp4", filename=Path(seg.path).name)
 
 

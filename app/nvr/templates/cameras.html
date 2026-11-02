@@ -1,37 +1,119 @@
 {% extends "base.html" %}
 {% block title %}Câmeras — ICSEE NVR{% endblock %}
 {% block content %}
-<div class="row" style="justify-content:space-between;margin-bottom:1rem">
-  <h1>Câmeras</h1>
+<div class="row between" style="margin-bottom:0.35rem">
+  <h1 style="margin:0">Câmeras</h1>
   <a class="btn" href="/cameras/new">Nova câmera</a>
 </div>
-<div class="card">
+<p class="page-lead">Cadastro, ordem no Live, gravação e visibilidade.</p>
+
+<div class="mobile-only cam-cards">
+  {% for cam in cameras %}
+  <div class="card cam-card" {% if not cam.dashboard_visible %}style="opacity:0.7"{% endif %}>
+    <div class="row between" style="margin-bottom:0.35rem">
+      <h3 style="margin:0">{{ cam.name }}</h3>
+      <div class="order-actions">
+        <form method="post" action="/cameras/{{ cam.id }}/move">
+          <input type="hidden" name="direction" value="up">
+          <button class="btn-secondary order-btn" type="submit" {% if loop.first %}disabled{% endif %} aria-label="Subir">↑</button>
+        </form>
+        <form method="post" action="/cameras/{{ cam.id }}/move">
+          <input type="hidden" name="direction" value="down">
+          <button class="btn-secondary order-btn" type="submit" {% if loop.last %}disabled{% endif %} aria-label="Descer">↓</button>
+        </form>
+      </div>
+    </div>
+    <p class="meta muted">{{ cam.host }}:{{ cam.rtsp_port }} · {{ cam.username }}</p>
+    <div class="flags">
+      <span class="pill {% if cam.recording_enabled %}on{% else %}off{% endif %}">Grava: {{ "sim" if cam.recording_enabled else "não" }}</span>
+      <span class="pill {% if cam.enabled %}on{% else %}off{% endif %}">Ativa: {{ "sim" if cam.enabled else "não" }}</span>
+      <span class="pill {% if cam.dashboard_visible %}on{% else %}off{% endif %}">Live: {{ "visível" if cam.dashboard_visible else "oculta" }}</span>
+    </div>
+    <div class="actions">
+      <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
+      <form method="post" action="/cameras/{{ cam.id }}/toggle-dashboard">
+        <button class="btn-secondary btn-block" type="submit">{% if cam.dashboard_visible %}Ocultar Live{% else %}Mostrar Live{% endif %}</button>
+      </form>
+      <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
+      <button
+        type="button"
+        class="btn-danger btn-block"
+        data-delete-cam
+        data-cam-id="{{ cam.id }}"
+        data-cam-name="{{ cam.name }}"
+      >Excluir</button>
+    </div>
+  </div>
+  {% else %}
+  <div class="card muted">Nenhuma câmera cadastrada.</div>
+  {% endfor %}
+</div>
+
+<div class="desktop-only card table-wrap">
   <table>
     <thead>
-      <tr><th>Nome</th><th>IP</th><th>User</th><th>Grava</th><th>Ativa</th><th></th></tr>
+      <tr><th>Ordem</th><th>Nome</th><th>IP</th><th>User</th><th>Grava</th><th>Ativa</th><th>No Live</th><th></th></tr>
     </thead>
     <tbody>
     {% for cam in cameras %}
-      <tr>
+      <tr {% if not cam.dashboard_visible %}style="opacity:0.65"{% endif %}>
+        <td>
+          <div class="order-actions">
+            <form method="post" action="/cameras/{{ cam.id }}/move">
+              <input type="hidden" name="direction" value="up">
+              <button class="btn-secondary order-btn" type="submit" {% if loop.first %}disabled{% endif %} aria-label="Subir">↑</button>
+            </form>
+            <form method="post" action="/cameras/{{ cam.id }}/move">
+              <input type="hidden" name="direction" value="down">
+              <button class="btn-secondary order-btn" type="submit" {% if loop.last %}disabled{% endif %} aria-label="Descer">↓</button>
+            </form>
+          </div>
+        </td>
         <td>{{ cam.name }}</td>
         <td>{{ cam.host }}:{{ cam.rtsp_port }}</td>
         <td>{{ cam.username }}</td>
         <td>{{ "sim" if cam.recording_enabled else "não" }}</td>
         <td>{{ "sim" if cam.enabled else "não" }}</td>
-        <td class="row">
-          <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
-          <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
-          <form method="post" action="/cameras/{{ cam.id }}/delete" onsubmit="return confirm('Remover?')">
-            <button class="btn-danger" type="submit">Excluir</button>
-          </form>
+        <td>{{ "visível" if cam.dashboard_visible else "oculta" }}</td>
+        <td>
+          <div class="actions">
+            <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
+            <form method="post" action="/cameras/{{ cam.id }}/toggle-dashboard">
+              <button class="btn-secondary" type="submit">{% if cam.dashboard_visible %}Ocultar{% else %}Mostrar{% endif %}</button>
+            </form>
+            <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
+            <button
+              type="button"
+              class="btn-danger"
+              data-delete-cam
+              data-cam-id="{{ cam.id }}"
+              data-cam-name="{{ cam.name }}"
+            >Excluir</button>
+          </div>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="6" class="muted">Nenhuma câmera cadastrada.</td></tr>
+      <tr><td colspan="8" class="muted">Nenhuma câmera cadastrada.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+
+<div class="modal" id="delete-modal" hidden>
+  <div class="modal-backdrop" data-close-modal></div>
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <h2 id="delete-modal-title">Excluir câmera</h2>
+    <p class="muted" id="delete-modal-text">Tem certeza?</p>
+    <p class="muted" style="margin-top:0.35rem">As gravações dessa câmera também serão removidas.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" data-close-modal>Cancelar</button>
+      <form id="delete-form" method="post" action="#">
+        <button class="btn-danger" type="submit">Excluir</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <pre id="test-out" class="muted"></pre>
 <script>
 async function testCam(id) {
@@ -41,5 +123,40 @@ async function testCam(id) {
   const j = await r.json();
   out.textContent = (j.ok ? 'OK: ' : 'Falha: ') + j.detail;
 }
+
+(function () {
+  const modal = document.getElementById('delete-modal');
+  const form = document.getElementById('delete-form');
+  const text = document.getElementById('delete-modal-text');
+  if (!modal || !form || !text) return;
+
+  function openModal(id, name) {
+    form.action = '/cameras/' + id + '/delete';
+    text.textContent = 'Excluir permanentemente “' + name + '”?';
+    modal.hidden = false;
+    document.body.classList.add('modal-open');
+    const confirmBtn = form.querySelector('button[type="submit"]');
+    if (confirmBtn) confirmBtn.focus();
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+
+  document.querySelectorAll('[data-delete-cam]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openModal(btn.dataset.camId, btn.dataset.camName || 'esta câmera');
+    });
+  });
+
+  modal.querySelectorAll('[data-close-modal]').forEach((el) => {
+    el.addEventListener('click', closeModal);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+})();
 </script>
 {% endblock %}

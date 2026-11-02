@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ICSEE NVR — Documentação Técnica</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e7ecf3;
+      --muted: #9aabbf;
+      --accent: #3d9cf0;
+      --border: #2a3548;
+      --code: #121a26;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.35rem; }
+    h2 {
+      margin-top: 2rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.25rem;
+      color: var(--accent);
+    }
+    h3 { margin-top: 1.25rem; font-size: 1.05rem; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    code, pre {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    code {
+      background: var(--code);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    pre {
+      background: var(--code);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .toc a { color: var(--accent); text-decoration: none; }
+    .toc li { margin: 0.25rem 0; }
+    .diagram {
+      white-space: pre;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.35;
+      overflow-x: auto;
+    }
+    footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>ICSEE NVR — Documentação Técnica</h1>
+    <p class="muted">Sistema local de monitoramento e gravação (DVR) para câmeras ICSEE/Xiongmai.</p>
+    <p class="muted">Projeto: <code>/home/nestertec/Documentos/projects/icsee</code> · Documento gerado para referência de arquitetura e operação.</p>
+
+    <div class="card toc">
+      <strong>Sumário</strong>
+      <ol>
+        <li><a href="#objetivo">Objetivo</a></li>
+        <li><a href="#stack">Stack tecnológica</a></li>
+        <li><a href="#arquitetura">Arquitetura</a></li>
+        <li><a href="#fluxo">Fluxos principais</a></li>
+        <li><a href="#dados">Modelo de dados</a></li>
+        <li><a href="#cameras">Integração com câmeras ICSEE</a></li>
+        <li><a href="#gravacao">Gravação e cota</a></li>
+        <li><a href="#acesso">Acesso local e remoto (ngrok)</a></li>
+        <li><a href="#seguranca">Segurança</a></li>
+        <li><a href="#operacao">Operação (Docker)</a></li>
+        <li><a href="#estrutura">Estrutura de pastas</a></li>
+        <li><a href="#limites">Limitações e evolução</a></li>
+      </ol>
+    </div>
+
+    <h2 id="objetivo">1. Objetivo</h2>
+    <p>
+      Substituir o uso diário do aplicativo ICSEE (nuvem/propagandas) por um <strong>NVR local</strong>:
+      login administrativo, cadastro de câmeras com credenciais de dispositivo, visualização ao vivo no navegador,
+      gravação contínua em MP4, limpeza automática por cota de disco e layout responsivo (desktop/mobile).
+    </p>
+
+    <h2 id="stack">2. Stack tecnológica</h2>
+    <table>
+      <thead>
+        <tr><th>Camada</th><th>Tecnologia</th><th>Função</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Linguagem principal</td>
+          <td><strong>Python 3.12</strong></td>
+          <td>API, painel web, orquestração de gravação</td>
+        </tr>
+        <tr>
+          <td>Framework web</td>
+          <td><strong>FastAPI</strong> + Starlette</td>
+          <td>Rotas HTTP, sessão, templates</td>
+        </tr>
+        <tr>
+          <td>Interface</td>
+          <td><strong>Jinja2</strong> + HTML/CSS/JS</td>
+          <td>UI server-rendered (Live, Câmeras, Gravações, Config)</td>
+        </tr>
+        <tr>
+          <td>Banco de dados</td>
+          <td><strong>SQLite</strong> via SQLAlchemy 2</td>
+          <td>Usuários, câmeras, settings, metadados de segmentos</td>
+        </tr>
+        <tr>
+          <td>Live streaming</td>
+          <td><strong>go2rtc</strong> (AlexxIT)</td>
+          <td>Consome RTSP e entrega WebRTC/MSE no navegador</td>
+        </tr>
+        <tr>
+          <td>Gravação / remux</td>
+          <td><strong>FFmpeg</strong></td>
+          <td>Captura RTSP → segmentos TS → MP4 com <code>faststart</code></td>
+        </tr>
+        <tr>
+          <td>Criptografia</td>
+          <td>argon2-cffi, cryptography (Fernet)</td>
+          <td>Hash de senha admin; criptografia das senhas das câmeras</td>
+        </tr>
+        <tr>
+          <td>Empacotamento</td>
+          <td><strong>Docker Compose</strong></td>
+          <td>Serviços <code>app</code>, <code>go2rtc</code>, <code>edge</code> (nginx)</td>
+        </tr>
+        <tr>
+          <td>Proxy de borda</td>
+          <td><strong>nginx</strong></td>
+          <td>Porta 8090: painel (<code>/</code>) + live (<code>/rtc/</code>)</td>
+        </tr>
+        <tr>
+          <td>Acesso remoto</td>
+          <td><strong>ngrok</strong></td>
+          <td>Túnel HTTPS público para a porta 8090</td>
+        </tr>
+        <tr>
+          <td>Testes</td>
+          <td>pytest + TestClient</td>
+          <td>Auth, câmeras, cota, sync go2rtc, health</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="arquitetura">3. Arquitetura</h2>
+    <div class="card">
+      <pre class="diagram">Browser (LAN / ngrok)
+        │
+        ▼
+   nginx :8090  (serviço edge)
+    ├── /          → FastAPI :8080   (painel NVR)
+    └── /rtc/      → go2rtc  :1984   (player live)
+                      │
+                      │ RTSP
+                      ▼
+                 Câmeras ICSEE (LAN)
+                      ▲
+                      │ RTSP (gravação)
+                 FFmpeg (no container app)
+                      │
+                      ▼
+              recordings/cameras/{id}/.../*.mp4
+                      ▲
+                 SQLite (metadados)</pre>
+    </div>
+    <p>
+      O painel gera automaticamente o arquivo <code>go2rtc.generated.yaml</code> a partir das câmeras
+      cadastradas. O serviço de recorder supervisiona um processo FFmpeg por câmera com gravação ligada.
+    </p>
+
+    <h2 id="fluxo">4. Fluxos principais</h2>
+    <h3>4.1 Login</h3>
+    <ol>
+      <li>Usuário acessa <code>/login</code>.</li>
+      <li>Credenciais conferidas com hash <strong>Argon2</strong> no SQLite.</li>
+      <li>Sessão cookie (<code>SessionMiddleware</code>) protege as demais rotas.</li>
+      <li>Admin seed: e-mail configurável (<code>ADMIN_EMAIL</code>), senha em <code>ADMIN_PASSWORD</code> no <code>.env</code>.</li>
+    </ol>
+
+    <h3>4.2 Live</h3>
+    <ol>
+      <li>Dashboard lista câmeras com <code>enabled=true</code> e <code>dashboard_visible=true</code>.</li>
+      <li>Cada card embute <code>/rtc/stream.html?src=cam_{id}</code> (go2rtc).</li>
+      <li>go2rtc abre WebSocket relativo <code>api/ws?src=...</code> e entrega o stream (MSE/WebRTC).</li>
+      <li>Tela cheia / nova aba / giro (CSS ou <code>screen.orientation.lock</code>) no cliente.</li>
+    </ol>
+
+    <h3>4.3 Cadastro de câmera</h3>
+    <ol>
+      <li>Admin informa nome, IP, usuário/senha do <strong>dispositivo</strong> (não a conta cloud ICSEE).</li>
+      <li>Senha é criptografada (Fernet) e salva em <code>password_enc</code>.</li>
+      <li>App regenera config do go2rtc e reconcilia recorders FFmpeg.</li>
+    </ol>
+
+    <h3>4.4 Gravações (consulta)</h3>
+    <ol>
+      <li>Tela inicia vazia (performance).</li>
+      <li>Usuário escolhe câmera + período rápido (30m, 1h, …) ou datas De/Até.</li>
+      <li>Lista segmentos; o <code>&lt;video&gt;</code> só carrega ao clicar em Reproduzir.</li>
+    </ol>
+
+    <h2 id="dados">5. Modelo de dados (SQLite)</h2>
+    <table>
+      <thead><tr><th>Tabela</th><th>Campos principais</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>users</code></td>
+          <td><code>id</code>, <code>email</code>, <code>password_hash</code></td>
+        </tr>
+        <tr>
+          <td><code>cameras</code></td>
+          <td>
+            <code>name</code>, <code>host</code>, <code>rtsp_port</code>, <code>username</code>, <code>password_enc</code>,
+            <code>channel</code>, <code>stream_sub</code>, <code>stream_main</code>,
+            <code>recording_enabled</code>, <code>enabled</code>, <code>dashboard_visible</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>app_settings</code></td>
+          <td>chave/valor: <code>storage_path</code>, <code>quota_gb</code></td>
+        </tr>
+        <tr>
+          <td><code>recording_segments</code></td>
+          <td><code>camera_id</code>, <code>path</code>, <code>started_at</code>, <code>ended_at</code>, <code>size_bytes</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="cameras">6. Integração com câmeras ICSEE</h2>
+    <p>
+      Câmeras ICSEE usam firmware da família <strong>Xiongmai / H264DVR</strong>. O acesso local usa RTSP (porta 554)
+      com autenticação Digest e URL no formato típico XM:
+    </p>
+<pre>rtsp://USER:PASS@IP:554/user=USER&amp;password=PASS&amp;channel=1&amp;stream=0.sdp?
+# stream=0 → main (gravação)
+# stream=1 → sub (live mais leve)</pre>
+    <p>
+      A senha do <strong>aplicativo/conta cloud</strong> não é a mesma da senha do <strong>dispositivo</strong>.
+      No app ICSEE: Configurações → conexão NVR/PC / modificar senha do dispositivo
+      (usuário aleatório tipo <code>ahkn</code> + senha curta).
+    </p>
+    <p>
+      Rede: o PC precisa estar na mesma LAN das câmeras. Em roteadores Fiberhome, isolamento Wi‑Fi↔cabo
+      pode bloquear o acesso; Wi‑Fi na mesma SSID das câmeras costuma funcionar.
+    </p>
+
+    <h2 id="gravacao">7. Gravação e cota</h2>
+    <h3>Pipeline</h3>
+    <ol>
+      <li>FFmpeg lê RTSP (main stream) com <code>-rtsp_transport tcp</code>.</li>
+      <li>Escreve segmentos <strong>MPEG-TS</strong> (<code>.ts</code>) de ~5 minutos (configurável: <code>SEGMENT_SECONDS</code>).</li>
+      <li>Quando o arquivo <code>.ts</code> estabiliza (tamanho não muda entre varreduras), remux para <strong>MP4</strong>
+          com <code>-c copy -movflags +faststart</code>.</li>
+      <li>Só então o segmento é registrado no banco (evita listar MP4 incompletos sem átomo <code>moov</code>).</li>
+    </ol>
+    <h3>Por que TS → MP4?</h3>
+    <p>
+      Gravar MP4 direto com muxer <code>segment</code> deixa arquivos inválidos se o processo reinicia no meio
+      do segmento (<code>moov atom not found</code>). TS é robusto durante a escrita; o MP4 final fica reproduzível
+      em qualquer navegador/dispositivo.
+    </p>
+    <h3>Cota (anel)</h3>
+    <ul>
+      <li>Cota em GB definida nas Configurações (livre, limitada ao espaço do disco).</li>
+      <li>Quando uso ≥ cota <em>ou</em> espaço livre &lt; reserva (~2 GB), apaga os segmentos <strong>mais antigos</strong>.</li>
+    </ul>
+
+    <h2 id="acesso">8. Acesso local e remoto</h2>
+    <table>
+      <thead><tr><th>Modo</th><th>URL</th></tr></thead>
+      <tbody>
+        <tr><td>Painel direto</td><td><code>http://127.0.0.1:8080</code></td></tr>
+        <tr><td>Entrada unificada (nginx)</td><td><code>http://127.0.0.1:8090</code></td></tr>
+        <tr><td>go2rtc direto</td><td><code>http://127.0.0.1:1984</code></td></tr>
+        <tr><td>Remoto</td><td>túnel ngrok → porta <strong>8090</strong></td></tr>
+      </tbody>
+    </table>
+    <p>
+      <code>GO2RTC_PUBLIC_URL=/rtc</code> faz o iframe do live usar o mesmo origem do painel (necessário atrás do ngrok,
+      pois o plano free oferece um domínio público).
+    </p>
+<pre># subir stack
+cd /home/nestertec/Documentos/projects/icsee
+docker compose up -d
+
+# túnel (exemplo)
+ngrok start nvr \
+  --config ~/.config/ngrok/ngrok.yml \
+  --config ./ngrok.yml</pre>
+
+    <h2 id="seguranca">9. Segurança</h2>
+    <ul>
+      <li>Senha admin: Argon2 (nunca em texto puro no banco).</li>
+      <li>Senhas de câmera: Fernet com chave <code>CAMERA_SECRET_KEY</code>.</li>
+      <li><code>.env</code> e <code>go2rtc.generated.yaml</code> ficam fora do git (segredos / URLs com senha).</li>
+      <li>Não expor câmeras com port-forward; preferir VPN/ngrok apenas do painel.</li>
+      <li>ngrok free mostra página de aviso na primeira visita.</li>
+    </ul>
+
+    <h2 id="operacao">10. Operação (Docker)</h2>
+    <table>
+      <thead><tr><th>Serviço</th><th>Imagem / build</th><th>Porta (host)</th></tr></thead>
+      <tbody>
+        <tr><td><code>app</code></td><td>Dockerfile Python + FFmpeg</td><td>8080</td></tr>
+        <tr><td><code>go2rtc</code></td><td><code>alexxit/go2rtc</code></td><td>1984 (e 8554/8555)</td></tr>
+        <tr><td><code>edge</code></td><td><code>nginx:alpine</code></td><td>8090</td></tr>
+      </tbody>
+    </table>
+    <p>Todos usam <code>network_mode: host</code> para alcançar as câmeras na LAN com simplicidade.</p>
+<pre>docker compose logs -f app
+docker compose restart app
+# testes (dentro da imagem)
+docker run --rm -v "$PWD/app:/app" -w /app icsee-app:latest \
+  bash -c 'pip install -q pytest && PYTHONPATH=. pytest -v'</pre>
+
+    <h2 id="estrutura">11. Estrutura de pastas</h2>
+<pre>icsee/
+├── app/                      # código FastAPI
+│   ├── nvr/
+│   │   ├── main.py           # app factory + lifespan
+│   │   ├── models.py         # SQLAlchemy
+│   │   ├── recorder.py       # FFmpeg + remux + cota scan
+│   │   ├── go2rtc_sync.py    # gera YAML do go2rtc
+│   │   ├── routers/web.py    # rotas HTML
+│   │   ├── templates/        # Jinja2
+│   │   └── static/           # CSS responsivo
+│   ├── tests/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── recordings/               # vídeos (volume)
+├── docs/
+│   ├── tecnico.html          # este documento
+│   └── superpowers/          # spec e plano de implementação
+├── docker-compose.yml
+├── nginx.conf
+├── ngrok.yml
+└── go2rtc.generated.yaml     # gerado (não versionar com senhas)</pre>
+
+    <h2 id="limites">12. Limitações e evolução</h2>
+    <div class="card">
+      <p><strong>MVP atual não inclui:</strong> PTZ, áudio bidirecional, detecção de movimento, multi-usuário com papéis, autenticação no go2rtc público.</p>
+      <p><strong>Riscos conhecidos:</strong> CPU no transcode H.265→H.264 no go2rtc; WebRTC atrás de NAT/ngrok pode falhar (MSE costuma ir melhor); isolamento Wi‑Fi do ONT; cada câmera pode ter usuário/senha próprios.</p>
+      <p><strong>Próximos passos naturais:</strong> autenticação no edge, Tailscale em vez de ngrok, alertas, PTZ via protocolo XM/ONVIF.</p>
+    </div>
+
+    <footer>
+      ICSEE NVR · documentação técnica · HTML estático em <code>docs/tecnico.html</code>
+    </footer>
+  </div>
+</body>
+</html>

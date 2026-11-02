@@ -1,18 +1,315 @@
 {% extends "base.html" %}
 {% block title %}Live — ICSEE NVR{% endblock %}
 {% block content %}
-<h1>Live</h1>
+<div class="live-toolbar">
+  <div>
+    <h1>Live</h1>
+    <p class="page-lead">Monitoramento em tempo real das câmeras visíveis no painel.</p>
+  </div>
+  {% if cameras %}
+  <div class="live-controls">
+    <div class="layout-picker" role="group" aria-label="Câmeras por tela">
+      <span class="layout-label">Por tela</span>
+      <div class="layout-options">
+        {% for n in [1, 2, 4, 6, 8] %}
+        <button type="button" class="layout-btn" data-layout="{{ n }}" aria-pressed="false">{{ n }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="page-controls" id="page-controls" hidden>
+      <button type="button" class="btn-secondary page-btn" id="page-prev" aria-label="Página anterior">‹</button>
+      <span class="page-indicator" id="page-indicator">1 / 1</span>
+      <button type="button" class="btn-secondary page-btn" id="page-next" aria-label="Próxima página">›</button>
+      <div class="rotate-menu" id="rotate-controls" hidden>
+        <button
+          type="button"
+          class="btn-secondary rotate-menu-btn"
+          id="rotate-menu-btn"
+          aria-expanded="false"
+          aria-controls="rotate-popover"
+          title="Alternar páginas"
+        >⟳</button>
+        <div class="rotate-popover" id="rotate-popover" hidden>
+          <label class="rotate-toggle">
+            <input type="checkbox" id="rotate-enabled">
+            <span>Alternar páginas</span>
+          </label>
+          <label class="rotate-interval-label" for="rotate-interval">Intervalo</label>
+          <select id="rotate-interval" aria-label="Intervalo de alternância">
+            <option value="10">10s</option>
+            <option value="15" selected>15s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
 {% if not cameras %}
-<p class="muted">Nenhuma câmera ativa. <a href="/cameras/new">Adicionar câmera</a></p>
+<p class="muted">Nenhuma câmera visível no Live. <a href="/cameras">Gerenciar câmeras</a> (pode haver câmeras ocultas).</p>
 {% else %}
-<div class="grid">
+<div class="live-grid" id="live-grid" data-layout="4" data-count="{{ cameras|length }}">
   {% for cam in cameras %}
-  <div class="card">
-    <h3>{{ cam.name }}</h3>
-    <p class="muted">{{ cam.host }} · stream cam_{{ cam.id }}</p>
-    <iframe class="live" src="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}" allow="autoplay"></iframe>
+  <div class="card live-card" id="live-card-{{ cam.id }}" data-stream="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}">
+    <div class="live-head">
+      <div class="live-title">
+        <h3>{{ cam.name }}</h3>
+        <p class="muted live-meta">{{ cam.host }} · cam_{{ cam.id }}</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn-secondary" onclick="toggleFullscreen('live-wrap-{{ cam.id }}')">Tela cheia</button>
+        <a class="btn btn-secondary live-extra" href="/live/{{ cam.id }}/fullscreen" target="_blank" rel="noopener">Nova aba</a>
+      </div>
+    </div>
+    <div class="live-wrap" id="live-wrap-{{ cam.id }}">
+      <iframe class="live" src="about:blank" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      <div class="fs-controls">
+        <button type="button" class="btn-secondary" onclick="toggleRotateFs('live-wrap-{{ cam.id }}', this)">Girar ⟲</button>
+        <button type="button" class="btn-secondary" onclick="exitFullscreen()">Sair</button>
+      </div>
+    </div>
   </div>
   {% endfor %}
 </div>
 {% endif %}
+<script>
+(function () {
+  const KEYS = {
+    layout: 'icsee_live_layout',
+    rotate: 'icsee_live_rotate',
+    interval: 'icsee_live_rotate_interval',
+  };
+  const grid = document.getElementById('live-grid');
+  const layoutButtons = document.querySelectorAll('.layout-btn');
+  const pageControls = document.getElementById('page-controls');
+  const rotateControls = document.getElementById('rotate-controls');
+  const pagePrev = document.getElementById('page-prev');
+  const pageNext = document.getElementById('page-next');
+  const pageIndicator = document.getElementById('page-indicator');
+  const rotateEnabled = document.getElementById('rotate-enabled');
+  const rotateInterval = document.getElementById('rotate-interval');
+  const rotateMenuBtn = document.getElementById('rotate-menu-btn');
+  const rotatePopover = document.getElementById('rotate-popover');
+  if (!grid || !layoutButtons.length) return;
+
+  const cards = Array.from(grid.querySelectorAll('.live-card'));
+  const desktopMq = window.matchMedia('(min-width: 640px)');
+  let layout = 4;
+  let page = 0;
+  let timer = null;
+  let hoverPaused = false;
+
+  function isDesktop() {
+    return desktopMq.matches;
+  }
+
+  function pageSize() {
+    // Mobile: lista simples com todas as câmeras (sem grade/paginação de wall).
+    return isDesktop() ? layout : Math.max(cards.length, 1);
+  }
+
+  function syncRotateBtn() {
+    if (!rotateMenuBtn || !rotateEnabled) return;
+    rotateMenuBtn.classList.toggle('is-on', !!rotateEnabled.checked);
+    rotateMenuBtn.title = rotateEnabled.checked
+      ? `Alternar ligado (${(rotateInterval && rotateInterval.value) || 15}s)`
+      : 'Alternar páginas';
+  }
+
+  function setPopover(open) {
+    if (!rotatePopover || !rotateMenuBtn) return;
+    rotatePopover.hidden = !open;
+    rotateMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function pages() {
+    return Math.max(1, Math.ceil(cards.length / pageSize()));
+  }
+
+  function loadCard(card, on) {
+    const iframe = card.querySelector('iframe.live');
+    if (!iframe) return;
+    const src = card.dataset.stream || '';
+    if (on) {
+      if (iframe.getAttribute('src') !== src) iframe.src = src;
+    } else if (iframe.getAttribute('src') !== 'about:blank') {
+      iframe.src = 'about:blank';
+    }
+  }
+
+  function renderPage() {
+    const size = pageSize();
+    const total = pages();
+    if (page >= total) page = total - 1;
+    if (page < 0) page = 0;
+    const start = page * size;
+    const end = start + size;
+    const desktop = isDesktop();
+
+    cards.forEach((card, i) => {
+      const visible = i >= start && i < end;
+      card.hidden = !visible;
+      card.classList.toggle('is-page-active', visible);
+      loadCard(card, visible);
+    });
+
+    const multi = desktop && total > 1;
+    if (pageControls) pageControls.hidden = !multi;
+    if (rotateControls) rotateControls.hidden = !multi;
+    if (!multi) setPopover(false);
+    if (pageIndicator) pageIndicator.textContent = `${page + 1} / ${total}`;
+    if (pagePrev) pagePrev.disabled = !multi;
+    if (pageNext) pageNext.disabled = !multi;
+  }
+
+  function applyLayout(n, { persist = true, resetPage = true } = {}) {
+    layout = Number(n) || 4;
+    const desktop = isDesktop();
+    grid.dataset.layout = desktop ? String(layout) : '1';
+    document.body.classList.toggle('live-dense', desktop && layout >= 4);
+    document.body.classList.toggle('live-wall', desktop && layout >= 6);
+    layoutButtons.forEach((btn) => {
+      const on = Number(btn.dataset.layout) === layout;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (persist) {
+      try { localStorage.setItem(KEYS.layout, String(layout)); } catch (_) {}
+    }
+    if (resetPage) page = 0;
+    renderPage();
+    restartTimer();
+  }
+
+  function go(delta) {
+    const total = pages();
+    if (total <= 1) return;
+    page = (page + delta + total) % total;
+    renderPage();
+  }
+
+  function restartTimer() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    if (!isDesktop() || !rotateEnabled || !rotateEnabled.checked || pages() <= 1) return;
+    const sec = Number(rotateInterval && rotateInterval.value) || 15;
+    timer = setInterval(() => {
+      if (hoverPaused || document.hidden) return;
+      go(1);
+    }, sec * 1000);
+  }
+
+  // restore prefs
+  let savedLayout = '4';
+  let savedRotate = false;
+  let savedInterval = '15';
+  try {
+    savedLayout = localStorage.getItem(KEYS.layout) || savedLayout;
+    savedRotate = localStorage.getItem(KEYS.rotate) === '1';
+    savedInterval = localStorage.getItem(KEYS.interval) || savedInterval;
+  } catch (_) {}
+  if (![1, 2, 4, 6, 8].includes(Number(savedLayout))) savedLayout = '4';
+  if (rotateInterval) rotateInterval.value = savedInterval;
+  if (rotateEnabled) rotateEnabled.checked = savedRotate;
+  syncRotateBtn();
+
+  layoutButtons.forEach((btn) => {
+    btn.addEventListener('click', () => applyLayout(btn.dataset.layout));
+  });
+  if (pagePrev) pagePrev.addEventListener('click', () => { go(-1); restartTimer(); });
+  if (pageNext) pageNext.addEventListener('click', () => { go(1); restartTimer(); });
+  if (rotateMenuBtn) {
+    rotateMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setPopover(!!rotatePopover.hidden);
+    });
+  }
+  document.addEventListener('click', (e) => {
+    if (!rotateControls || !rotatePopover || rotatePopover.hidden) return;
+    if (!rotateControls.contains(e.target)) setPopover(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setPopover(false);
+  });
+  if (rotateEnabled) {
+    rotateEnabled.addEventListener('change', () => {
+      try { localStorage.setItem(KEYS.rotate, rotateEnabled.checked ? '1' : '0'); } catch (_) {}
+      syncRotateBtn();
+      restartTimer();
+    });
+  }
+  if (rotateInterval) {
+    rotateInterval.addEventListener('change', () => {
+      try { localStorage.setItem(KEYS.interval, rotateInterval.value); } catch (_) {}
+      syncRotateBtn();
+      restartTimer();
+    });
+  }
+
+  grid.addEventListener('mouseenter', () => { hoverPaused = true; });
+  grid.addEventListener('mouseleave', () => { hoverPaused = false; });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) restartTimer();
+  });
+
+  applyLayout(savedLayout);
+  const onViewportChange = () => applyLayout(layout, { persist: false, resetPage: true });
+  if (desktopMq.addEventListener) desktopMq.addEventListener('change', onViewportChange);
+  else if (desktopMq.addListener) desktopMq.addListener(onViewportChange);
+})();
+
+function toggleFullscreen(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  } else {
+    exitFullscreen();
+  }
+}
+function exitFullscreen() {
+  document.querySelectorAll('.live-wrap.rotated').forEach((w) => w.classList.remove('rotated'));
+  try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (_) {}
+  if (document.fullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+}
+async function toggleRotateFs(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!document.fullscreenElement) {
+    await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  }
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+      el.classList.remove('rotated');
+      btn.textContent = 'Normal ⟳';
+      btn.dataset.native = '1';
+      return;
+    }
+  } catch (_) {}
+  if (btn.dataset.native === '1') {
+    try { screen.orientation.unlock(); } catch (_) {}
+    delete btn.dataset.native;
+    btn.textContent = 'Girar ⟲';
+    el.classList.remove('rotated');
+    return;
+  }
+  const on = el.classList.toggle('rotated');
+  btn.textContent = on ? 'Normal ⟳' : 'Girar ⟲';
+}
+document.addEventListener('fullscreenchange', () => {
+  document.querySelectorAll('.live-wrap').forEach((w) => {
+    const active = document.fullscreenElement === w;
+    w.classList.toggle('is-fullscreen', active);
+    if (!active) w.classList.remove('rotated');
+  });
+});
+</script>
 {% endblock %}

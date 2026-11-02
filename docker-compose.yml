@@ -20,12 +20,24 @@ services:
       TZ: America/Sao_Paulo
       DATABASE_URL: sqlite:////data/nvr.db
       DEFAULT_STORAGE_PATH: /recordings
-      GO2RTC_CONFIG_PATH: /home/nestertec/Documentos/projects/icsee/go2rtc.generated.yaml
+      GO2RTC_CONFIG_PATH: /data/go2rtc.generated.yaml
       GO2RTC_API: http://127.0.0.1:1984
-      GO2RTC_PUBLIC_URL: http://127.0.0.1:1984
+      # Same-origin via nginx edge (/rtc) — works on LAN and ngrok
+      GO2RTC_PUBLIC_URL: /rtc
     volumes:
       - ./app/data:/data
       - ./recordings:/recordings
-      - ./go2rtc.generated.yaml:/home/nestertec/Documentos/projects/icsee/go2rtc.generated.yaml
+      - ./go2rtc.generated.yaml:/data/go2rtc.generated.yaml
     depends_on:
+      - go2rtc
+
+  edge:
+    image: nginx:alpine
+    container_name: icsee-edge
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
       - go2rtc

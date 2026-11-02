@@ -2,46 +2,126 @@
 {% block title %}Gravações — ICSEE NVR{% endblock %}
 {% block content %}
 <h1>Gravações</h1>
+<p class="page-lead">Filtre por câmera e período para reproduzir os segmentos gravados.</p>
 <div class="card">
-  <form method="get" class="row">
-    <div>
-      <label>Câmera</label>
-      <select name="camera_id">
-        <option value="">Todas</option>
-        {% for c in cameras %}
-        <option value="{{ c.id }}" {% if camera_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
+  <p class="muted" style="margin-top:0">1) Câmera · 2) Período rápido ou datas · 3) Buscar</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form id="rec-form" method="get">
+    <label>Câmera</label>
+    <select name="camera_id" id="camera_id" required>
+      <option value="" disabled {% if not camera_id %}selected{% endif %}>Selecione...</option>
+      {% for c in cameras %}
+      <option value="{{ c.id }}" {% if camera_id == c.id %}selected{% endif %}>{{ c.name }} ({{ c.host }})</option>
+      {% endfor %}
+    </select>
+
+    <label style="margin-top:1rem">Períodos rápidos</label>
+    <div class="preset-row">
+      {% for key, (label, _) in presets.items() %}
+      <button
+        type="submit"
+        class="btn-secondary{% if preset == key %} btn{% endif %}"
+        name="preset"
+        value="{{ key }}"
+        formaction="/recordings"
+        onclick="return requireCamera()"
+      >{{ label }}</button>
+      {% endfor %}
     </div>
-    <div>
-      <label>A partir de</label>
-      <input type="date" name="date" value="{{ date }}">
+
+    <label>Ou período personalizado</label>
+    <div class="date-row">
+      <div class="field">
+        <label>De</label>
+        <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
+      </div>
+      <div class="field">
+        <label>Até</label>
+        <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
+      </div>
+      <div class="field">
+        <button type="submit" class="btn-block" onclick="return requireCustom()">Buscar datas</button>
+      </div>
     </div>
-    <div style="align-self:end"><button type="submit">Filtrar</button></div>
   </form>
 </div>
+
+{% if not searched %}
 <div class="card">
+  <p class="muted">Nada listado ainda. Selecione câmera e um período.</p>
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">{{ range_label }} · {{ segments|length }} segmento(s). Toque em Reproduzir para carregar.</p>
+  <div class="table-wrap">
   <table>
-    <thead><tr><th>Início</th><th>Câmera</th><th>Tamanho</th><th></th></tr></thead>
+    <thead><tr><th>Início</th><th>Tamanho</th><th></th></tr></thead>
     <tbody>
     {% for s in segments %}
       <tr>
         <td>{{ s.started_at }}</td>
-        <td>{{ s.camera_id }}</td>
         <td>{{ '%.1f'|format(s.size_bytes / 1048576) }} MB</td>
-        <td class="row">
-          <a class="btn btn-secondary" href="/recordings/{{ s.id }}/file" target="_blank">Abrir / baixar</a>
+        <td>
+          <div class="actions">
+            <button type="button" class="btn-secondary" onclick="playSeg({{ s.id }}, this)">Reproduzir</button>
+            <a class="btn btn-secondary" href="/recordings/{{ s.id }}/file" download>Baixar</a>
+          </div>
         </td>
       </tr>
-      <tr>
-        <td colspan="4">
-          <video controls preload="metadata" style="width:100%;max-height:240px" src="/recordings/{{ s.id }}/file"></video>
+      <tr id="player-row-{{ s.id }}" style="display:none">
+        <td colspan="3">
+          <video id="player-{{ s.id }}" controls playsinline preload="none" style="width:100%;max-height:50vh;background:#000;border-radius:8px"></video>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="4" class="muted">Nenhuma gravação ainda.</td></tr>
+      <tr><td colspan="3" class="muted">Nenhuma gravação neste período.</td></tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
+{% endif %}
+<script>
+function requireCamera() {
+  const cam = document.getElementById('camera_id');
+  if (!cam.value) {
+    alert('Selecione a câmera primeiro.');
+    return false;
+  }
+  document.getElementById('date_from').value = '';
+  document.getElementById('date_to').value = '';
+  return true;
+}
+function requireCustom() {
+  const cam = document.getElementById('camera_id');
+  const from = document.getElementById('date_from');
+  const to = document.getElementById('date_to');
+  if (!cam.value) {
+    alert('Selecione a câmera primeiro.');
+    return false;
+  }
+  if (!from.value || !to.value) {
+    alert('Informe as datas De e Até.');
+    return false;
+  }
+  return true;
+}
+function playSeg(id, btn) {
+  const row = document.getElementById('player-row-' + id);
+  const video = document.getElementById('player-' + id);
+  document.querySelectorAll('tr[id^="player-row-"]').forEach((r) => {
+    if (r.id !== row.id) {
+      r.style.display = 'none';
+      const v = r.querySelector('video');
+      if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+    }
+  });
+  row.style.display = '';
+  video.src = '/recordings/' + id + '/file';
+  video.play().catch(() => {});
+  btn.textContent = 'Reproduzindo';
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+</script>
 {% endblock %}

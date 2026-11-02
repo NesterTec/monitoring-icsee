@@ -28,8 +28,13 @@ class Camera(Base):
     stream_main: Mapped[int] = mapped_column(Integer, default=0)
     recording_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    dashboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
 
-    segments: Mapped[list["RecordingSegment"]] = relationship(back_populates="camera")
+    segments: Mapped[list["RecordingSegment"]] = relationship(
+        back_populates="camera",
+        cascade="all, delete-orphan",
+    )
 
 
 class AppSetting(Base):

@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Configurações — ICSEE NVR{% endblock %}
 {% block content %}
-<div class="card" style="max-width:640px">
-  <h1>Configurações</h1>
+<h1>Configurações</h1>
+<p class="page-lead">Armazenamento, cota e limpeza automática dos vídeos antigos.</p>
+<div class="card form-narrow">
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
   <p class="muted">Usado: {{ '%.2f'|format(used_bytes / 1073741824) }} GB · Livre: {{ '%.2f'|format(free_bytes / 1073741824) }} GB</p>
@@ -12,7 +13,7 @@
     <label>Cota (GB)</label>
     <input name="quota_gb" type="number" step="0.1" min="0.1" required value="{{ quota_gb }}">
     <p class="muted">Ao atingir a cota (ou disco quase cheio), os vídeos mais antigos são apagados.</p>
-    <p style="margin-top:1rem"><button type="submit">Salvar</button></p>
+    <p style="margin-top:1rem"><button class="btn-block" type="submit">Salvar</button></p>
   </form>
 </div>
 {% endblock %}
