@@ -335,7 +335,7 @@ def logs_page(request: Request, db: Session = Depends(get_db)):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    logs = list_recent(db, limit=200)
+    logs = list_recent(db, limit=30)
     return templates.TemplateResponse(request, "logs.html", {"user": user, "logs": logs})
 
 

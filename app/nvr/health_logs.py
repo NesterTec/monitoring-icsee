@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from nvr.models import HealthLog
 
-MAX_LOGS = 500
+MAX_LOGS = 30
 
 
 def append_health_log(
