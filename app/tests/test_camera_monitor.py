@@ -51,7 +51,7 @@ def test_three_failures_triggers_rediscovery_flag():
 
 def test_rediscover_updates_host_first_free_match(app_env):
     from nvr.camera_monitor import rediscover_camera
-    from nvr.notifications import list_active
+    from nvr.health_logs import list_recent
 
     init_db()
     db = db_module.SessionLocal()
@@ -82,14 +82,15 @@ def test_rediscover_updates_host_first_free_match(app_env):
         db.refresh(cam)
         assert cam.host == "10.0.0.3"
         assert cam.reachability_status == "ok"
-        assert list_active(db) == []
+        logs = list_recent(db)
+        assert any(l.event == "rediscovery" and l.level == "ok" for l in logs)
     finally:
         db.close()
 
 
 def test_rediscover_marks_lost_when_no_match(app_env):
     from nvr.camera_monitor import rediscover_camera
-    from nvr.notifications import list_active
+    from nvr.health_logs import list_recent
 
     init_db()
     db = db_module.SessionLocal()
@@ -114,9 +115,8 @@ def test_rediscover_marks_lost_when_no_match(app_env):
         assert result == "lost"
         db.refresh(cam)
         assert cam.reachability_status == "lost"
-        items = list_active(db)
-        assert len(items) == 1
-        assert "Hall" in items[0].message
+        logs = list_recent(db)
+        assert any(l.event == "rediscovery" and l.level == "error" and "Hall" == l.camera_name for l in logs)
     finally:
         db.close()
 

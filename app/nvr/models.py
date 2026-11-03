@@ -65,6 +65,19 @@ class Notification(Base):
     camera: Mapped[Camera] = relationship(back_populates="notifications")
 
 
+class HealthLog(Base):
+    __tablename__ = "health_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    level: Mapped[str] = mapped_column(String(16), default="info")
+    event: Mapped[str] = mapped_column(String(32), default="ping")
+    camera_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    camera_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    message: Mapped[str] = mapped_column(Text)
+
+
 class RecordingSegment(Base):
     __tablename__ = "recording_segments"
 

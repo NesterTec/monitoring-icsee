@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Logs — ICSEE NVR{% endblock %}
+{% block content %}
+<h1>Logs</h1>
+<p class="page-lead">Histórico das verificações de alcance (ping TCP na porta RTSP) e rediscovery.</p>
+
+{% if not logs %}
+<div class="card"><p class="muted" style="margin:0">Nenhum log ainda. O monitor grava aqui a cada ciclo (~30s).</p></div>
+{% else %}
+<div class="card" style="overflow:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Quando</th>
+        <th>Nível</th>
+        <th>Evento</th>
+        <th>Câmera</th>
+        <th>Host</th>
+        <th>Mensagem</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in logs %}
+      <tr>
+        <td class="muted">{{ row.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+        <td>
+          <span class="pill {% if row.level == 'ok' %}on{% elif row.level == 'error' %}off{% else %}{% endif %}">{{ row.level }}</span>
+        </td>
+        <td>{{ row.event }}</td>
+        <td>{{ row.camera_name or '—' }}</td>
+        <td><code>{{ row.host or '—' }}</code></td>
+        <td>{{ row.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

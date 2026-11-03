@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 import nvr.db as db_module
 from nvr.discover import guess_default_cidr, probe_rtsp_auth, scan_rtsp_hosts, tcp_open
 from nvr.go2rtc_sync import sync_go2rtc
+from nvr.health_logs import append_health_log
 from nvr.models import Camera
-from nvr.notifications import clear_camera_lost, ensure_camera_lost
+from nvr.notifications import clear_camera_lost
 from nvr.recorder import recorder_manager
 from nvr.security import decrypt_secret
 
@@ -104,10 +105,18 @@ def rediscover_camera(
     except ValueError as exc:
         logger.warning("rediscovery scan failed camera_id=%s: %s", cam.id, exc)
         db.commit()
+        append_health_log(
+            db,
+            level="error",
+            event="rediscovery",
+            camera_id=cam.id,
+            camera_name=cam.name,
+            host=cam.host,
+            message=f"Varredura falhou: {exc}",
+        )
         return "skipped"
 
     owned = _owned_hosts(db, cam.id)
-    # Also skip current host — we already know it's down.
     owned.add((cam.host or "").strip())
     candidates = [h for h in hosts if h.strip() not in owned]
 
@@ -115,17 +124,35 @@ def rediscover_camera(
     match = auth_first(candidates, cam.username, password, cam.rtsp_port or 554)
 
     if match:
+        old = cam.host
         cam.host = match
         cam.fail_count = 0
         cam.reachability_status = "ok"
         cam.last_seen_at = now
         db.commit()
         clear_camera_lost(db, cam.id)
+        append_health_log(
+            db,
+            level="ok",
+            event="rediscovery",
+            camera_id=cam.id,
+            camera_name=cam.name,
+            host=match,
+            message=f"Reatachada: {old} → {match}",
+        )
         return "updated"
 
     cam.reachability_status = "lost"
     db.commit()
-    ensure_camera_lost(db, cam)
+    append_health_log(
+        db,
+        level="error",
+        event="rediscovery",
+        camera_id=cam.id,
+        camera_name=cam.name,
+        host=cam.host,
+        message="Nenhum IP livre autenticou com as credenciais salvas",
+    )
     return "lost"
 
 
@@ -173,10 +200,31 @@ class CameraMonitor:
                 db.commit()
                 if was_lost:
                     clear_camera_lost(db, cam.id)
+                append_health_log(
+                    db,
+                    level="ok",
+                    event="ping",
+                    camera_id=cam.id,
+                    camera_name=cam.name,
+                    host=cam.host,
+                    message=f"TCP {cam.host}:{cam.rtsp_port or 554} OK",
+                )
                 continue
 
             should_scan = apply_health_failure(cam)
             db.commit()
+            append_health_log(
+                db,
+                level="error",
+                event="ping",
+                camera_id=cam.id,
+                camera_name=cam.name,
+                host=cam.host,
+                message=(
+                    f"TCP {cam.host}:{cam.rtsp_port or 554} falhou "
+                    f"(falhas seguidas: {cam.fail_count})"
+                ),
+            )
             if not should_scan:
                 continue
 

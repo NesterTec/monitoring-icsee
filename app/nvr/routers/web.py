@@ -14,7 +14,7 @@ from nvr.camera_monitor import rediscover_camera
 from nvr.discover import auth_probe_hosts, guess_default_cidr, probe_rtsp_auth, scan_rtsp_hosts
 from nvr.go2rtc_sync import sync_go2rtc
 from nvr.models import Camera, RecordingSegment, User
-from nvr.notifications import list_active
+from nvr.health_logs import list_recent
 from nvr.quota import dir_size, free_bytes
 from nvr.reattach import reattach_from_scanned_hosts
 from nvr.recorder import recorder_manager, segment_dir
@@ -330,22 +330,13 @@ def cameras_test(camera_id: int, request: Request, db: Session = Depends(get_db)
     return {"ok": ok, "detail": detail}
 
 
-@router.get("/notifications")
-def notifications_list(request: Request, db: Session = Depends(get_db)):
-    require_user(request, db)
-    items = list_active(db)
-    return {
-        "items": [
-            {
-                "id": n.id,
-                "camera_id": n.camera_id,
-                "kind": n.kind,
-                "message": n.message,
-                "created_at": n.created_at.isoformat(timespec="seconds"),
-            }
-            for n in items
-        ]
-    }
+@router.get("/logs", response_class=HTMLResponse)
+def logs_page(request: Request, db: Session = Depends(get_db)):
+    user = _user_or_redirect(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    logs = list_recent(db, limit=200)
+    return templates.TemplateResponse(request, "logs.html", {"user": user, "logs": logs})
 
 
 @router.post("/cameras/{camera_id}/retry-reachability")

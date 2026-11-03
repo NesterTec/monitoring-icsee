@@ -21,9 +21,3 @@ def test_ensure_camera_lost_is_idempotent(app_env):
         assert list_active(db) == []
     finally:
         db.close()
-
-
-def test_notifications_endpoint_empty(auth_client):
-    r = auth_client.get("/notifications")
-    assert r.status_code == 200
-    assert r.json()["items"] == []
