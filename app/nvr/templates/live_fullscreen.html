@@ -18,6 +18,7 @@
       padding: 0.55rem 0.75rem; border-radius: 8px; cursor: pointer;
       text-decoration: none; font-size: 0.9rem; min-height: 40px;
     }
+    .bar button.is-hd { background: rgba(74, 163, 240, 0.85); color: #0b1017; font-weight: 700; }
     .bar .title { flex: 1 1 8rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .stage {
       position: fixed; inset: 0; background: #000;
@@ -27,7 +28,6 @@
       border: 0; background: #000;
       width: 100%; height: 100%;
     }
-    /* Fake landscape: rotate video 90° for phones locked in portrait */
     body.rotated .stage iframe {
       width: 100dvh;
       height: 100dvw;
@@ -43,15 +43,51 @@
 <body>
   <div class="bar">
     <div class="title">{{ camera.name }} · {{ camera.host }}</div>
+    <button type="button" id="btn-quality" aria-pressed="false" title="Qualidade do stream">SD</button>
     <button type="button" id="btn-rotate" onclick="toggleRotate()">Girar ⟲</button>
     <button type="button" onclick="goFs()">Tela cheia</button>
     <a href="/">Voltar</a>
   </div>
   <div class="stage" id="stage">
-    <iframe id="player" src="{{ go2rtc_public }}/stream.html?src=cam_{{ camera.id }}" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    <iframe
+      id="player"
+      data-stream-sd="{{ go2rtc_public }}/stream.html?src=cam_{{ camera.id }}"
+      data-stream-hd="{{ go2rtc_public }}/stream.html?src=cam_{{ camera.id }}_hd"
+      src="about:blank"
+      allow="autoplay; fullscreen"
+      allowfullscreen
+    ></iframe>
   </div>
   <script>
+    const CAMERA_ID = {{ camera.id }};
+    const QUALITY_KEY = 'icsee_live_quality_' + CAMERA_ID;
+    const player = document.getElementById('player');
+    const qualityBtn = document.getElementById('btn-quality');
     let rotated = false;
+
+    function getQuality() {
+      try {
+        return localStorage.getItem(QUALITY_KEY) === 'hd' ? 'hd' : 'sd';
+      } catch (_) {
+        return 'sd';
+      }
+    }
+
+    function applyQuality(q) {
+      const src = q === 'hd' ? player.dataset.streamHd : player.dataset.streamSd;
+      if (player.getAttribute('src') !== src) player.src = src;
+      qualityBtn.textContent = q === 'hd' ? 'HD' : 'SD';
+      qualityBtn.setAttribute('aria-pressed', q === 'hd' ? 'true' : 'false');
+      qualityBtn.classList.toggle('is-hd', q === 'hd');
+    }
+
+    qualityBtn.addEventListener('click', () => {
+      const next = getQuality() === 'hd' ? 'sd' : 'hd';
+      try { localStorage.setItem(QUALITY_KEY, next); } catch (_) {}
+      applyQuality(next);
+    });
+
+    applyQuality(getQuality());
 
     async function lockLandscape() {
       try {
@@ -76,13 +112,11 @@
       const btn = document.getElementById('btn-rotate');
       btn.textContent = rotated ? 'Normal ⟳' : 'Girar ⟲';
       if (rotated) {
-        // Prefer native lock when fullscreen; CSS rotate is the fallback
         if (!document.fullscreenElement) {
           try { await goFs(); } catch (_) {}
         }
         const locked = await lockLandscape();
         if (locked) {
-          // native landscape — CSS rotate not needed
           document.body.classList.remove('rotated');
           rotated = false;
           btn.textContent = 'Travado em paisagem (toque Normal para soltar)';

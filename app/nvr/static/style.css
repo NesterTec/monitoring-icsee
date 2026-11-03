@@ -463,6 +463,12 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
 .live-grid[data-layout="2"] { grid-template-columns: 1fr; }
 
 .live-card { overflow: hidden; padding: 0; margin-bottom: 0; }
+.quality-btn.is-hd {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
 .live-card .live-head {
   display: flex;
   flex-direction: column;

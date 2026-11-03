@@ -53,13 +53,21 @@
 {% else %}
 <div class="live-grid" id="live-grid" data-layout="4" data-count="{{ cameras|length }}">
   {% for cam in cameras %}
-  <div class="card live-card" id="live-card-{{ cam.id }}" data-stream="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}">
+  <div
+    class="card live-card"
+    id="live-card-{{ cam.id }}"
+    data-camera-id="{{ cam.id }}"
+    data-stream-sd="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}"
+    data-stream-hd="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}_hd"
+    data-stream="{{ go2rtc_public }}/stream.html?src=cam_{{ cam.id }}"
+  >
     <div class="live-head">
       <div class="live-title">
         <h3>{{ cam.name }}</h3>
         <p class="muted live-meta">{{ cam.host }} · cam_{{ cam.id }}</p>
       </div>
       <div class="actions">
+        <button type="button" class="btn-secondary quality-btn" data-quality-toggle aria-pressed="false" title="Qualidade do stream">SD</button>
         <button type="button" class="btn-secondary" onclick="toggleFullscreen('live-wrap-{{ cam.id }}')">Tela cheia</button>
         <a class="btn btn-secondary live-extra" href="/live/{{ cam.id }}/fullscreen" target="_blank" rel="noopener">Nova aba</a>
       </div>
@@ -81,6 +89,7 @@
     layout: 'icsee_live_layout',
     rotate: 'icsee_live_rotate',
     interval: 'icsee_live_rotate_interval',
+    quality: (id) => 'icsee_live_quality_' + id,
   };
   const grid = document.getElementById('live-grid');
   const layoutButtons = document.querySelectorAll('.layout-btn');
@@ -111,6 +120,33 @@
     return isDesktop() ? layout : Math.max(cards.length, 1);
   }
 
+  function getQuality(cameraId) {
+    try {
+      const v = localStorage.getItem(KEYS.quality(cameraId));
+      return v === 'hd' ? 'hd' : 'sd';
+    } catch (_) {
+      return 'sd';
+    }
+  }
+
+  function setQuality(cameraId, quality) {
+    try { localStorage.setItem(KEYS.quality(cameraId), quality); } catch (_) {}
+  }
+
+  function streamForCard(card) {
+    const id = card.dataset.cameraId;
+    const q = getQuality(id);
+    const src = q === 'hd' ? (card.dataset.streamHd || card.dataset.streamSd) : card.dataset.streamSd;
+    card.dataset.stream = src || '';
+    const btn = card.querySelector('[data-quality-toggle]');
+    if (btn) {
+      btn.textContent = q === 'hd' ? 'HD' : 'SD';
+      btn.setAttribute('aria-pressed', q === 'hd' ? 'true' : 'false');
+      btn.classList.toggle('is-hd', q === 'hd');
+    }
+    return card.dataset.stream;
+  }
+
   function syncRotateBtn() {
     if (!rotateMenuBtn || !rotateEnabled) return;
     rotateMenuBtn.classList.toggle('is-on', !!rotateEnabled.checked);
@@ -132,13 +168,26 @@
   function loadCard(card, on) {
     const iframe = card.querySelector('iframe.live');
     if (!iframe) return;
-    const src = card.dataset.stream || '';
+    const src = streamForCard(card);
     if (on) {
       if (iframe.getAttribute('src') !== src) iframe.src = src;
     } else if (iframe.getAttribute('src') !== 'about:blank') {
       iframe.src = 'about:blank';
     }
   }
+
+  cards.forEach((card) => {
+    const btn = card.querySelector('[data-quality-toggle]');
+    if (!btn) return;
+    streamForCard(card);
+    btn.addEventListener('click', () => {
+      const id = card.dataset.cameraId;
+      const next = getQuality(id) === 'hd' ? 'sd' : 'hd';
+      setQuality(id, next);
+      const visible = card.classList.contains('is-page-active') && !card.hidden;
+      loadCard(card, visible);
+    });
+  });
 
   function renderPage() {
     const size = pageSize();
