@@ -16,6 +16,7 @@ from nvr.go2rtc_sync import sync_go2rtc
 from nvr.models import Camera, RecordingSegment, User
 from nvr.notifications import list_active
 from nvr.quota import dir_size, free_bytes
+from nvr.reattach import reattach_from_scanned_hosts
 from nvr.recorder import recorder_manager, segment_dir
 from nvr.rtsp import build_rtsp_url, probe_rtsp
 from nvr.security import decrypt_secret, encrypt_secret
@@ -167,6 +168,25 @@ async def cameras_discover_auth(request: Request, db: Session = Depends(get_db))
     results = auth_probe_hosts(hosts, username, password, port=port)
     matches = [r for r in results if r["ok"]]
     return {"matches": matches, "tried": len(results), "results": results}
+
+
+@router.post("/cameras/discover/reattach")
+async def cameras_discover_reattach(request: Request, db: Session = Depends(get_db)):
+    require_user(request, db)
+    payload = await request.json()
+    port = int(payload.get("port") or 554)
+    hosts = [str(h).strip() for h in (payload.get("hosts") or []) if str(h).strip()]
+    if not hosts:
+        raise HTTPException(400, detail="Nenhum IP para testar — rode a varredura antes")
+    if len(hosts) > 64:
+        raise HTTPException(400, detail="Muitos hosts (máx. 64)")
+    if db.query(Camera).count() == 0:
+        raise HTTPException(400, detail="Nenhuma câmera cadastrada para reatachar")
+    result = reattach_from_scanned_hosts(db, hosts, port=port)
+    if result["updated"]:
+        sync_go2rtc(db)
+        recorder_manager.reconcile(db)
+    return result
 
 
 @router.post("/cameras/create")

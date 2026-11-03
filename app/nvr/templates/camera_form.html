@@ -5,7 +5,7 @@
   {% if not camera %}
   <div class="card discover-card">
     <h2 class="discover-title">Descobrir na rede</h2>
-    <p class="muted" style="margin-top:0">Varre a LAN por porta RTSP e testa login/senha do dispositivo.</p>
+    <p class="muted" style="margin-top:0">Varre a LAN por porta RTSP. Use logins já salvos para reatachar IPs novos, ou teste um login manual.</p>
     <label for="discover-cidr">Rede (CIDR)</label>
     <div class="row stretch">
       <input id="discover-cidr" value="{{ default_cidr }}" placeholder="192.168.1.0/24">
@@ -16,6 +16,12 @@
     <div id="discover-hosts" class="discover-hosts" hidden></div>
 
     <div id="discover-auth-block" hidden>
+      <p style="margin-top:0.85rem" class="row">
+        <button type="button" class="btn" id="discover-reattach-btn">Reatachar com logins salvos</button>
+      </p>
+      <p class="muted" id="discover-reattach-status"></p>
+      <div id="discover-reattach-results" class="discover-matches"></div>
+
       <label for="discover-user">Usuário do dispositivo</label>
       <input id="discover-user" autocomplete="username" placeholder="ex.: nbsj">
       <label for="discover-pass">Senha do dispositivo</label>
@@ -133,6 +139,7 @@
 (function () {
   const scanBtn = document.getElementById('discover-scan-btn');
   const authBtn = document.getElementById('discover-auth-btn');
+  const reattachBtn = document.getElementById('discover-reattach-btn');
   const cidrInput = document.getElementById('discover-cidr');
   const portInput = document.getElementById('discover-port');
   const hostsBox = document.getElementById('discover-hosts');
@@ -140,6 +147,8 @@
   const scanStatus = document.getElementById('discover-scan-status');
   const authStatus = document.getElementById('discover-auth-status');
   const matchesBox = document.getElementById('discover-matches');
+  const reattachStatus = document.getElementById('discover-reattach-status');
+  const reattachResults = document.getElementById('discover-reattach-results');
   let scannedHosts = [];
 
   function esc(s) {
@@ -165,6 +174,8 @@
     hostsBox.innerHTML = '';
     matchesBox.innerHTML = '';
     authStatus.textContent = '';
+    if (reattachStatus) reattachStatus.textContent = '';
+    if (reattachResults) reattachResults.innerHTML = '';
     try {
       const r = await fetch('/cameras/discover/scan', {
         method: 'POST',
@@ -196,6 +207,57 @@
       scanBtn.disabled = false;
     }
   });
+
+  if (reattachBtn) {
+    reattachBtn.addEventListener('click', async () => {
+      const port = Number(portInput.value) || 554;
+      if (!scannedHosts.length) {
+        if (reattachStatus) reattachStatus.textContent = 'Rode a varredura antes.';
+        return;
+      }
+      reattachBtn.disabled = true;
+      if (reattachStatus) reattachStatus.textContent = 'Testando logins salvos nos IPs novos…';
+      if (reattachResults) reattachResults.innerHTML = '';
+      try {
+        const r = await fetch('/cameras/discover/reattach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hosts: scannedHosts, port }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || 'Falha ao reatachar');
+        const updated = j.updated || [];
+        const unmatched = j.unmatched || [];
+        const skipped = j.skipped || [];
+        if (reattachStatus) {
+          reattachStatus.textContent =
+            updated.length + ' reatachada(s), ' +
+            unmatched.length + ' sem match, ' +
+            skipped.length + ' ainda no IP antigo.';
+        }
+        if (reattachResults) {
+          const lines = [];
+          updated.forEach((u) => {
+            lines.push(
+              '<div class="discover-match-row"><div><strong>' + esc(u.name) + '</strong>' +
+              '<div class="muted">' + esc(u.old_host) + ' → ' + esc(u.host) + '</div></div></div>'
+            );
+          });
+          unmatched.forEach((u) => {
+            lines.push(
+              '<div class="discover-match-row"><div><strong>' + esc(u.name) + '</strong>' +
+              '<div class="muted">não encontrada (' + esc(u.reason) + ')</div></div></div>'
+            );
+          });
+          reattachResults.innerHTML = lines.join('');
+        }
+      } catch (e) {
+        if (reattachStatus) reattachStatus.textContent = 'Erro: ' + (e.message || e);
+      } finally {
+        reattachBtn.disabled = false;
+      }
+    });
+  }
 
   authBtn.addEventListener('click', async () => {
     const username = document.getElementById('discover-user').value.trim();
