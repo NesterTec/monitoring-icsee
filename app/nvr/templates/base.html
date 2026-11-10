@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1a2332">
   <title>{% block title %}ICSEE NVR{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v=17">
+  {% set bp = base_path|default('') %}
+  <link rel="stylesheet" href="{{ bp }}/static/style.css?v=18">
+  <script>window.ICSEE_BASE = {{ bp|tojson }};</script>
 </head>
 <body>
 {% if user is defined and user %}
@@ -14,13 +16,13 @@
     <div class="brand">ICSEE NVR</div>
     <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Abrir menu" aria-expanded="false">☰</button>
     <nav id="main-nav">
-      <a href="/">Live</a>
-      <a href="/cameras">Câmeras</a>
-      <a href="/recordings">Gravações</a>
-      <a href="/logs">Logs</a>
-      <a href="/settings">Configurações</a>
+      <a href="{{ bp }}/">Live</a>
+      <a href="{{ bp }}/cameras">Câmeras</a>
+      <a href="{{ bp }}/recordings">Gravações</a>
+      <a href="{{ bp }}/logs">Logs</a>
+      <a href="{{ bp }}/settings">Configurações</a>
     </nav>
-    <form class="logout-form" method="post" action="/logout">
+    <form class="logout-form" method="post" action="{{ bp }}/logout">
       <button class="btn-secondary" type="submit">Sair</button>
     </form>
   </div>

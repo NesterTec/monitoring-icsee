@@ -25,8 +25,10 @@ def sync_go2rtc(db: Session) -> Path:
         sub = build_rtsp_url(cam.host, cam.rtsp_port, cam.username, password, cam.channel, cam.stream_sub)
         main = build_rtsp_url(cam.host, cam.rtsp_port, cam.username, password, cam.channel, cam.stream_main)
         name = f"cam_{cam.id}"
-        streams[name] = [sub, f"ffmpeg:{name}#video=h264"]
-        streams[f"{name}_hd"] = [main, f"ffmpeg:{name}_hd#video=h264"]
+        # Single ffmpeg producer: one RTSP session to the camera and H264 for browsers.
+        # Dual raw+ffmpeg was opening extra sessions and stalling H265 devices (blank Live).
+        streams[name] = [f"ffmpeg:{sub}#video=h264"]
+        streams[f"{name}_hd"] = [f"ffmpeg:{main}#video=h264"]
 
     data = {
         "api": {"listen": ":1984"},

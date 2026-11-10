@@ -38,7 +38,7 @@
   <div class="card form-narrow">
     <h1>{% if camera %}Editar câmera{% else %}Nova câmera{% endif %}</h1>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <form method="post" action="{% if camera %}/cameras/{{ camera.id }}{% else %}/cameras/create{% endif %}">
+    <form method="post" action="{% if camera %}{{ base_path|default('') }}/cameras/{{ camera.id }}{% else %}{{ base_path|default('') }}/cameras/create{% endif %}">
       <label>Nome</label>
       <input id="field-name" name="name" required value="{{ camera.name if camera else '' }}">
       <label>IP / host</label>
@@ -61,7 +61,7 @@
       <p class="muted">Desmarque “Mostrar no painel Live” para ocultar duplicatas no dashboard; a câmera continua em Câmeras e pode voltar a aparecer.</p>
       <p style="margin-top:1rem" class="row">
         <button type="submit">Salvar</button>
-        <a class="btn btn-secondary" href="/cameras">Cancelar</a>
+        <a class="btn btn-secondary" href="{{ base_path|default('') }}/cameras">Cancelar</a>
       </p>
     </form>
 
@@ -81,7 +81,7 @@
     <div class="card form-narrow" style="margin-top:1rem">
       <h2>Substituir dispositivo</h2>
       <p class="muted">Mantém nome, ordem e gravações. Atualiza IP e credenciais da câmera nova.</p>
-      <form method="post" action="/cameras/{{ camera.id }}/replace">
+      <form method="post" action="{{ base_path|default('') }}/cameras/{{ camera.id }}/replace">
         <label>IP / host novo</label>
         <input name="host" required placeholder="192.168.1.20">
         <label>Usuário novo</label>
@@ -112,7 +112,7 @@
     btn.disabled = true;
     if (status) status.textContent = 'Procurando na rede…';
     try {
-      const r = await fetch('/cameras/{{ camera.id }}/retry-reachability', { method: 'POST' });
+      const r = await fetch((window.ICSEE_BASE||'') + '/cameras/{{ camera.id }}/retry-reachability', { method: 'POST' });
       const data = await r.json();
       if (reach) reach.textContent = data.reachability_status || '';
       if (data.ok) {
@@ -177,7 +177,7 @@
     if (reattachStatus) reattachStatus.textContent = '';
     if (reattachResults) reattachResults.innerHTML = '';
     try {
-      const r = await fetch('/cameras/discover/scan', {
+      const r = await fetch((window.ICSEE_BASE||'') + '/cameras/discover/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -219,7 +219,7 @@
       if (reattachStatus) reattachStatus.textContent = 'Testando logins salvos nos IPs novos…';
       if (reattachResults) reattachResults.innerHTML = '';
       try {
-        const r = await fetch('/cameras/discover/reattach', {
+        const r = await fetch((window.ICSEE_BASE||'') + '/cameras/discover/reattach', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hosts: scannedHosts, port }),
@@ -275,7 +275,7 @@
     authStatus.textContent = 'Testando login em ' + scannedHosts.length + ' host(s)…';
     matchesBox.innerHTML = '';
     try {
-      const r = await fetch('/cameras/discover/auth', {
+      const r = await fetch((window.ICSEE_BASE||'') + '/cameras/discover/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hosts: scannedHosts, username, password, port }),

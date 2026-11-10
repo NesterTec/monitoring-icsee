@@ -24,7 +24,7 @@
         class="btn-secondary{% if preset == key %} btn{% endif %}"
         name="preset"
         value="{{ key }}"
-        formaction="/recordings"
+        formaction="{{ base_path|default('') }}/recordings"
         onclick="return requireCamera()"
       >{{ label }}</button>
       {% endfor %}
@@ -65,7 +65,7 @@
         <td>
           <div class="actions">
             <button type="button" class="btn-secondary" onclick="playSeg({{ s.id }}, this)">Reproduzir</button>
-            <a class="btn btn-secondary" href="/recordings/{{ s.id }}/file" download>Baixar</a>
+            <a class="btn btn-secondary" href="{{ base_path|default('') }}/recordings/{{ s.id }}/file" download>Baixar</a>
           </div>
         </td>
       </tr>

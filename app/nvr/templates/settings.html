@@ -7,7 +7,7 @@
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
   <p class="muted">Usado: {{ '%.2f'|format(used_bytes / 1073741824) }} GB · Livre: {{ '%.2f'|format(free_bytes / 1073741824) }} GB</p>
-  <form method="post" action="/settings">
+  <form method="post" action="{{ base_path|default('') }}/settings">
     <label>Pasta de gravações</label>
     <input name="storage_path" required value="{{ storage_path }}">
     <label>Cota (GB)</label>

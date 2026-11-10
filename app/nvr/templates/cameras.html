@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row between" style="margin-bottom:0.35rem">
   <h1 style="margin:0">Câmeras</h1>
-  <a class="btn" href="/cameras/new">Nova câmera</a>
+  <a class="btn" href="{{ base_path|default('') }}/cameras/new">Nova câmera</a>
 </div>
 <p class="page-lead">Cadastro, ordem no Live, gravação e visibilidade.</p>
 
@@ -13,11 +13,11 @@
     <div class="row between" style="margin-bottom:0.35rem">
       <h3 style="margin:0">{{ cam.name }}</h3>
       <div class="order-actions">
-        <form method="post" action="/cameras/{{ cam.id }}/move">
+        <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/move">
           <input type="hidden" name="direction" value="up">
           <button class="btn-secondary order-btn" type="submit" {% if loop.first %}disabled{% endif %} aria-label="Subir">↑</button>
         </form>
-        <form method="post" action="/cameras/{{ cam.id }}/move">
+        <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/move">
           <input type="hidden" name="direction" value="down">
           <button class="btn-secondary order-btn" type="submit" {% if loop.last %}disabled{% endif %} aria-label="Descer">↓</button>
         </form>
@@ -30,8 +30,8 @@
       <span class="pill {% if cam.dashboard_visible %}on{% else %}off{% endif %}">Live: {{ "visível" if cam.dashboard_visible else "oculta" }}</span>
     </div>
     <div class="actions">
-      <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
-      <form method="post" action="/cameras/{{ cam.id }}/toggle-dashboard">
+      <a class="btn btn-secondary" href="{{ base_path|default('') }}/cameras/{{ cam.id }}/edit">Editar</a>
+      <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/toggle-dashboard">
         <button class="btn-secondary btn-block" type="submit">{% if cam.dashboard_visible %}Ocultar Live{% else %}Mostrar Live{% endif %}</button>
       </form>
       <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
@@ -59,11 +59,11 @@
       <tr {% if not cam.dashboard_visible %}style="opacity:0.65"{% endif %}>
         <td>
           <div class="order-actions">
-            <form method="post" action="/cameras/{{ cam.id }}/move">
+            <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/move">
               <input type="hidden" name="direction" value="up">
               <button class="btn-secondary order-btn" type="submit" {% if loop.first %}disabled{% endif %} aria-label="Subir">↑</button>
             </form>
-            <form method="post" action="/cameras/{{ cam.id }}/move">
+            <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/move">
               <input type="hidden" name="direction" value="down">
               <button class="btn-secondary order-btn" type="submit" {% if loop.last %}disabled{% endif %} aria-label="Descer">↓</button>
             </form>
@@ -77,8 +77,8 @@
         <td>{{ "visível" if cam.dashboard_visible else "oculta" }}</td>
         <td>
           <div class="actions">
-            <a class="btn btn-secondary" href="/cameras/{{ cam.id }}/edit">Editar</a>
-            <form method="post" action="/cameras/{{ cam.id }}/toggle-dashboard">
+            <a class="btn btn-secondary" href="{{ base_path|default('') }}/cameras/{{ cam.id }}/edit">Editar</a>
+            <form method="post" action="{{ base_path|default('') }}/cameras/{{ cam.id }}/toggle-dashboard">
               <button class="btn-secondary" type="submit">{% if cam.dashboard_visible %}Ocultar{% else %}Mostrar{% endif %}</button>
             </form>
             <button type="button" class="btn-secondary" onclick="testCam({{ cam.id }})">Testar</button>
@@ -119,7 +119,7 @@
 async function testCam(id) {
   const out = document.getElementById('test-out');
   out.textContent = 'Testando...';
-  const r = await fetch('/cameras/' + id + '/test', { method: 'POST' });
+  const r = await fetch((window.ICSEE_BASE||'') + '/cameras/' + id + '/test', { method: 'POST' });
   const j = await r.json();
   out.textContent = (j.ok ? 'OK: ' : 'Falha: ') + j.detail;
 }
@@ -131,7 +131,7 @@ async function testCam(id) {
   if (!modal || !form || !text) return;
 
   function openModal(id, name) {
-    form.action = '/cameras/' + id + '/delete';
+    form.action = (window.ICSEE_BASE || '') + '/cameras/' + id + '/delete';
     text.textContent = 'Excluir permanentemente “' + name + '”?';
     modal.hidden = false;
     document.body.classList.add('modal-open');

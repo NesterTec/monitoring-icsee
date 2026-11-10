@@ -46,7 +46,7 @@
     <button type="button" id="btn-quality" aria-pressed="false" title="Qualidade do stream">SD</button>
     <button type="button" id="btn-rotate" onclick="toggleRotate()">Girar ⟲</button>
     <button type="button" onclick="goFs()">Tela cheia</button>
-    <a href="/">Voltar</a>
+    <a href="{{ base_path|default('') }}/">Voltar</a>
   </div>
   <div class="stage" id="stage">
     <iframe

@@ -1,0 +1,14 @@
+# /etc/wireguard/wg0.conf  (VPS)
+[Interface]
+Address = 10.10.10.1/24
+ListenPort = 51820
+PrivateKey = <SERVER_PRIVATE_KEY>
+# Encaminhar pacotes para a LAN anunciada pelo peer de casa
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
+
+[Peer]
+# PC casa
+PublicKey = <HOME_PUBLIC_KEY>
+AllowedIPs = 10.10.10.2/32, 192.168.1.0/24
+PersistentKeepalive = 25

@@ -21,9 +21,19 @@ from nvr.recorder import recorder_manager, segment_dir
 from nvr.rtsp import build_rtsp_url, probe_rtsp
 from nvr.security import decrypt_secret, encrypt_secret
 from nvr.settings_service import get_quota_gb, get_storage_path, set_quota_gb, set_storage_path
+from nvr.urls import abs_path, public_base_path
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 router = APIRouter()
+
+
+def _redirect(path: str) -> RedirectResponse:
+    return RedirectResponse(abs_path(path), status_code=303)
+
+
+def _tpl(request: Request, name: str, context: dict, **kwargs):
+    ctx = {"base_path": public_base_path(), **context}
+    return templates.TemplateResponse(request, name, ctx, **kwargs)
 
 
 def _cameras_ordered(db: Session, *, only_live: bool = False) -> list[Camera]:
@@ -42,12 +52,12 @@ def _user_or_redirect(request: Request, db: Session) -> User | RedirectResponse:
     try:
         return require_user(request, db)
     except HTTPException:
-        return RedirectResponse("/login", status_code=303)
+        return _redirect("/login")
 
 
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+    return _tpl(request, "login.html", {"error": None})
 
 
 @router.post("/login")
@@ -60,20 +70,20 @@ def login(
     seed_admin(db)
     user = authenticate(db, email.strip(), password)
     if user is None:
-        return templates.TemplateResponse(
+        return _tpl(
             request,
             "login.html",
             {"error": "E-mail ou senha inválidos"},
             status_code=401,
         )
     request.session["user_id"] = user.id
-    return RedirectResponse("/", status_code=303)
+    return _redirect("/")
 
 
 @router.post("/logout")
 def logout(request: Request):
     request.session.clear()
-    return RedirectResponse("/login", status_code=303)
+    return _redirect("/login")
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -82,7 +92,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
     cameras = _cameras_ordered(db, only_live=True)
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "dashboard.html",
         {"user": user, "cameras": cameras, "go2rtc_public": get_settings().go2rtc_public_url},
@@ -97,7 +107,7 @@ def live_fullscreen(camera_id: int, request: Request, db: Session = Depends(get_
     cam = db.get(Camera, camera_id)
     if cam is None or not cam.enabled:
         raise HTTPException(404)
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "live_fullscreen.html",
         {"user": user, "camera": cam, "go2rtc_public": get_settings().go2rtc_public_url},
@@ -110,7 +120,7 @@ def cameras_list(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
     cameras = _cameras_ordered(db)
-    return templates.TemplateResponse(request, "cameras.html", {"user": user, "cameras": cameras})
+    return _tpl(request, "cameras.html", {"user": user, "cameras": cameras})
 
 
 @router.get("/cameras/new", response_class=HTMLResponse)
@@ -118,7 +128,7 @@ def cameras_new(request: Request, db: Session = Depends(get_db)):
     user = _user_or_redirect(request, db)
     if isinstance(user, RedirectResponse):
         return user
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "camera_form.html",
         {
@@ -214,7 +224,7 @@ async def cameras_create(request: Request, db: Session = Depends(get_db)):
     db.commit()
     sync_go2rtc(db)
     recorder_manager.reconcile(db)
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 @router.get("/cameras/{camera_id}/edit", response_class=HTMLResponse)
@@ -225,7 +235,7 @@ def cameras_edit(camera_id: int, request: Request, db: Session = Depends(get_db)
     cam = db.get(Camera, camera_id)
     if cam is None:
         raise HTTPException(404)
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "camera_form.html",
         {"user": user, "camera": cam, "error": None, "default_cidr": guess_default_cidr()},
@@ -257,7 +267,7 @@ async def cameras_update(camera_id: int, request: Request, db: Session = Depends
     db.commit()
     sync_go2rtc(db)
     recorder_manager.reconcile(db)
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 @router.post("/cameras/{camera_id}/toggle-dashboard")
@@ -270,7 +280,7 @@ def cameras_toggle_dashboard(camera_id: int, request: Request, db: Session = Dep
         raise HTTPException(404)
     cam.dashboard_visible = not bool(cam.dashboard_visible)
     db.commit()
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 @router.post("/cameras/{camera_id}/move")
@@ -286,16 +296,16 @@ async def cameras_move(camera_id: int, request: Request, db: Session = Depends(g
     cameras = _cameras_ordered(db)
     idx = next((i for i, c in enumerate(cameras) if c.id == cam.id), None)
     if idx is None:
-        return RedirectResponse("/cameras", status_code=303)
+        return _redirect("/cameras")
     if direction == "up" and idx > 0:
         other = cameras[idx - 1]
     elif direction == "down" and idx < len(cameras) - 1:
         other = cameras[idx + 1]
     else:
-        return RedirectResponse("/cameras", status_code=303)
+        return _redirect("/cameras")
     cam.sort_order, other.sort_order = other.sort_order, cam.sort_order
     db.commit()
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 @router.post("/cameras/{camera_id}/delete")
@@ -315,7 +325,7 @@ def cameras_delete(camera_id: int, request: Request, db: Session = Depends(get_d
         shutil.rmtree(cam_dir, ignore_errors=True)
         sync_go2rtc(db)
         recorder_manager.reconcile(db)
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 @router.post("/cameras/{camera_id}/test")
@@ -336,7 +346,7 @@ def logs_page(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
     logs = list_recent(db, limit=30)
-    return templates.TemplateResponse(request, "logs.html", {"user": user, "logs": logs})
+    return _tpl(request, "logs.html", {"user": user, "logs": logs})
 
 
 @router.post("/cameras/{camera_id}/retry-reachability")
@@ -374,7 +384,7 @@ async def cameras_replace(camera_id: int, request: Request, db: Session = Depend
     channel = int(form.get("channel") or cam.channel or 1)
     stream_sub = int(form.get("stream_sub") or cam.stream_sub or 1)
     if not host or not username or not password:
-        return templates.TemplateResponse(
+        return _tpl(
             request,
             "camera_form.html",
             {
@@ -387,7 +397,7 @@ async def cameras_replace(camera_id: int, request: Request, db: Session = Depend
         )
     ok, detail = probe_rtsp_auth(host, username, password, port=rtsp_port, channel=channel, stream=stream_sub)
     if not ok:
-        return templates.TemplateResponse(
+        return _tpl(
             request,
             "camera_form.html",
             {
@@ -415,7 +425,7 @@ async def cameras_replace(camera_id: int, request: Request, db: Session = Depend
     clear_camera_lost(db, cam.id)
     sync_go2rtc(db)
     recorder_manager.reconcile(db)
-    return RedirectResponse("/cameras", status_code=303)
+    return _redirect("/cameras")
 
 
 def _recording_presets():
@@ -483,7 +493,7 @@ def recordings_list(
     elif camera_id and not use_preset and not use_custom:
         error = "Escolha um período rápido ou informe as datas De/Até."
 
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "recordings.html",
         {
@@ -524,7 +534,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
     storage = get_storage_path(db)
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "settings.html",
         {
@@ -561,7 +571,7 @@ async def settings_save(request: Request, db: Session = Depends(get_db)):
     except Exception as exc:
         error = str(exc)
     storage = get_storage_path(db)
-    return templates.TemplateResponse(
+    return _tpl(
         request,
         "settings.html",
         {

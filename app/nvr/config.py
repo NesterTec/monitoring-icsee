@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     go2rtc_config_path: str = "/config/go2rtc.yaml"
     go2rtc_api: str = "http://127.0.0.1:1984"
     go2rtc_public_url: str = "http://127.0.0.1:1984"
+    # When behind a reverse proxy path, e.g. "/adm/house/monitor"
+    public_base_path: str = ""
     disk_reserve_bytes: int = 2 * 1024**3
     segment_seconds: int = 300
     quota_gb: float = Field(default=50.0)

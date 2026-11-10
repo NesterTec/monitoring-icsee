@@ -49,7 +49,7 @@
 </div>
 
 {% if not cameras %}
-<p class="muted">Nenhuma câmera visível no Live. <a href="/cameras">Gerenciar câmeras</a> (pode haver câmeras ocultas).</p>
+<p class="muted">Nenhuma câmera visível no Live. <a href="{{ base_path|default('') }}/cameras">Gerenciar câmeras</a> (pode haver câmeras ocultas).</p>
 {% else %}
 <div class="live-grid" id="live-grid" data-layout="4" data-count="{{ cameras|length }}">
   {% for cam in cameras %}
@@ -69,7 +69,7 @@
       <div class="actions">
         <button type="button" class="btn-secondary quality-btn" data-quality-toggle aria-pressed="false" title="Qualidade do stream">SD</button>
         <button type="button" class="btn-secondary" onclick="toggleFullscreen('live-wrap-{{ cam.id }}')">Tela cheia</button>
-        <a class="btn btn-secondary live-extra" href="/live/{{ cam.id }}/fullscreen" target="_blank" rel="noopener">Nova aba</a>
+        <a class="btn btn-secondary live-extra" href="{{ base_path|default('') }}/live/{{ cam.id }}/fullscreen" target="_blank" rel="noopener">Nova aba</a>
       </div>
     </div>
     <div class="live-wrap" id="live-wrap-{{ cam.id }}">
