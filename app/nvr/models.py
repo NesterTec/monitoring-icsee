@@ -5,6 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nvr.db import Base
 
+ROLE_SUPERADMIN = "superadmin"
+ROLE_USER = "user"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -12,14 +15,37 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(32), default=ROLE_USER, index=True)
+
+    sites: Mapped[list["Site"]] = relationship(back_populates="owner")
+
+
+class Site(Base):
+    __tablename__ = "sites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    lan_cidr: Mapped[str] = mapped_column(String(64), default="192.168.1.0/24")
+    vpn_cidr: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    tunnel_ip: Mapped[str] = mapped_column(String(64), unique=True)
+    wg_public_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wg_private_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lan_iface: Mapped[str] = mapped_column(String(64), default="eth0")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    owner: Mapped["User"] = relationship(back_populates="sites")
+    cameras: Mapped[list["Camera"]] = relationship(back_populates="site")
 
 
 class Camera(Base):
     __tablename__ = "cameras"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     host: Mapped[str] = mapped_column(String(255))
+    host_lan: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rtsp_port: Mapped[int] = mapped_column(Integer, default=554)
     username: Mapped[str] = mapped_column(String(64))
     password_enc: Mapped[str] = mapped_column(Text)
@@ -35,6 +61,7 @@ class Camera(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_scan_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    site: Mapped["Site | None"] = relationship(back_populates="cameras")
     segments: Mapped[list["RecordingSegment"]] = relationship(
         back_populates="camera",
         cascade="all, delete-orphan",

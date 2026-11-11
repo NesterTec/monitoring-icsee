@@ -26,13 +26,19 @@ def app_env(tmp_path, monkeypatch):
 
 
 @pytest.fixture()
-def client(app_env):
+def client(app_env, monkeypatch):
     from nvr.camera_monitor import camera_monitor
     from nvr.db import init_db
     from nvr.main import create_app
+    from nvr.recorder import recorder_manager
 
     camera_monitor.enabled = False
     camera_monitor.stop()
+    # Avoid spawning ffmpeg in unit tests (host/CI may not have it).
+    monkeypatch.setattr(recorder_manager, "reconcile", lambda db: None)
+    monkeypatch.setattr(recorder_manager, "start_background", lambda: None)
+    monkeypatch.setattr(recorder_manager, "stop_all", lambda: None)
+    monkeypatch.setattr(recorder_manager, "stop_camera", lambda camera_id: None)
     init_db()
     with TestClient(create_app()) as c:
         yield c

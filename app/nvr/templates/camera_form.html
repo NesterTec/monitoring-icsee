@@ -5,7 +5,10 @@
   {% if not camera %}
   <div class="card discover-card">
     <h2 class="discover-title">Descobrir na rede</h2>
-    <p class="muted" style="margin-top:0">Varre a LAN por porta RTSP. Use logins já salvos para reatachar IPs novos, ou teste um login manual.</p>
+    <p class="muted" style="margin-top:0">Varre o bloco VPN da localidade (visível na VPS) por porta RTSP. Use logins salvos para reatachar, ou teste um login manual.</p>
+    {% if site %}
+    <p class="muted">Site <strong>{{ site.name }}</strong> · varredura sugerida <code>{{ site.vpn_cidr }}</code> (LAN casa <code>{{ site.lan_cidr }}</code>).</p>
+    {% endif %}
     <label for="discover-cidr">Rede (CIDR)</label>
     <div class="row stretch">
       <input id="discover-cidr" value="{{ default_cidr }}" placeholder="192.168.1.0/24">
@@ -41,8 +44,11 @@
     <form method="post" action="{% if camera %}{{ base_path|default('') }}/cameras/{{ camera.id }}{% else %}{{ base_path|default('') }}/cameras/create{% endif %}">
       <label>Nome</label>
       <input id="field-name" name="name" required value="{{ camera.name if camera else '' }}">
-      <label>IP / host</label>
-      <input id="field-host" name="host" required value="{{ camera.host if camera else '' }}" placeholder="192.168.1.15">
+      <label>IP na LAN de casa</label>
+      <input id="field-host" name="host_lan" required value="{{ (camera.host_lan or camera.host) if camera else '' }}" placeholder="192.168.1.15">
+      {% if site %}
+      <p class="muted">A VPS alcança a câmera em <code>{{ site.vpn_cidr }}</code> (mapeamento 1:1).{% if camera and camera.host %} Atual na VPS: <code>{{ camera.host }}</code>.{% endif %}</p>
+      {% endif %}
       <label>Usuário do dispositivo</label>
       <input id="field-username" name="username" required value="{{ camera.username if camera else '' }}">
       <label>Senha do dispositivo{% if camera %} (deixe em branco para manter){% endif %}</label>
@@ -82,7 +88,7 @@
       <h2>Substituir dispositivo</h2>
       <p class="muted">Mantém nome, ordem e gravações. Atualiza IP e credenciais da câmera nova.</p>
       <form method="post" action="{{ base_path|default('') }}/cameras/{{ camera.id }}/replace">
-        <label>IP / host novo</label>
+        <label>IP LAN (ou IP VPN) novo</label>
         <input name="host" required placeholder="192.168.1.20">
         <label>Usuário novo</label>
         <input name="username" required autocomplete="username">
@@ -116,9 +122,9 @@
       const data = await r.json();
       if (reach) reach.textContent = data.reachability_status || '';
       if (data.ok) {
-        if (status) status.textContent = 'Encontrada em ' + data.host;
+        if (status) status.textContent = 'Encontrada em ' + (data.host_lan || data.host);
         const hostField = document.getElementById('field-host');
-        if (hostField) hostField.value = data.host;
+        if (hostField) hostField.value = data.host_lan || data.host;
       } else if (data.result === 'lost') {
         if (status) status.textContent = 'Ainda perdida — nenhum dispositivo autenticou.';
       } else {

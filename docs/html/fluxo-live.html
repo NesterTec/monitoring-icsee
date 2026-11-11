@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluxo Live — ICSEE NVR</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <span class="brand">ICSEE NVR</span>
+      <a href="index.html">Hub</a>
+      <a href="fluxo-live.html">Live</a>
+      <a href="fluxo-deploy.html">Deploy / WG</a>
+      <a href="fluxo-rediscovery.html">Rediscovery</a>
+    </nav>
+
+    <h1>Fluxo Live</h1>
+    <p class="muted">
+      Do painel até o RTSP. Texto: <a href="../MANUAL.md">MANUAL.md</a> ·
+      <a href="../ARQUITETURA.md">ARQUITETURA.md</a>
+    </p>
+
+    <h2>Caminho HTTP / WebSocket</h2>
+    <div class="mermaid">
+sequenceDiagram
+  participant B as Browser
+  participant S as StoreNginx
+  participant E as Edge8090
+  participant A as FastAPI
+  participant G as go2rtc
+  participant C as CameraRTSP
+
+  B->>S: GET /adm/house/monitor/
+  S->>E: rewrite + proxy_pass host:8090
+  E->>A: GET /
+  A-->>B: dashboard HTML iframes
+  Note over B: GO2RTC_PUBLIC_URL + /stream.html?src=cam_id
+  B->>S: GET .../rtc/stream.html?src=cam_2
+  S->>E: /rtc/stream.html
+  E->>G: proxy /rtc/ to :1984
+  G-->>B: player HTML/JS
+  B->>S: WS .../rtc/api/ws?src=cam_2
+  S->>E: Upgrade websocket
+  E->>G: api/ws
+  G->>C: ffmpeg RTSP DESCRIBE/PLAY
+  C-->>G: media
+  G-->>B: MSE / WebRTC frames
+    </div>
+
+    <h2>Componentes no edge</h2>
+    <div class="mermaid">
+flowchart LR
+  Edge[nginx_edge_8090]
+  Edge -->|"location /"| App[app_8080]
+  Edge -->|"location /rtc/"| Go[go2rtc_1984]
+  Go -->|"ffmpeg RTSP"| Cam[Cameras]
+    </div>
+
+    <h2>Config crítica</h2>
+    <table>
+      <thead><tr><th>Env</th><th>Local</th><th>VPS</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>PUBLIC_BASE_PATH</code></td>
+          <td>(vazio)</td>
+          <td><code>/adm/house/monitor</code></td>
+        </tr>
+        <tr>
+          <td><code>GO2RTC_PUBLIC_URL</code></td>
+          <td><code>/rtc</code></td>
+          <td><code>/adm/house/monitor/rtc</code></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="card">
+      <p>
+        Se na VPS o container tiver <code>GO2RTC_PUBLIC_URL=/rtc</code>, o iframe pede
+        <code>https://www.nestertec.com.br/rtc/...</code> e cai no 404 do store
+        (“Página não encontrada”), não no go2rtc.
+      </p>
+      <pre>docker exec icsee-nvr printenv GO2RTC_PUBLIC_URL</pre>
+    </div>
+
+    <h2>Sync dos streams</h2>
+    <ol>
+      <li>Cadastro/edição de câmera → <code>go2rtc_sync.sync_go2rtc</code>.</li>
+      <li>Gera <code>cam_{id}</code> (sub) e <code>cam_{id}_hd</code> (main) com um producer ffmpeg cada.</li>
+      <li>POST <code>/api/restart</code> no go2rtc.</li>
+    </ol>
+
+    <footer>ICSEE NVR · <code>docs/html/fluxo-live.html</code></footer>
+  </div>
+</body>
+</html>

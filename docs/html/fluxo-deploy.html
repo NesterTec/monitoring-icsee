@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluxo Deploy / WireGuard — ICSEE NVR</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <span class="brand">ICSEE NVR</span>
+      <a href="index.html">Hub</a>
+      <a href="fluxo-live.html">Live</a>
+      <a href="fluxo-deploy.html">Deploy / WG</a>
+      <a href="fluxo-rediscovery.html">Rediscovery</a>
+    </nav>
+
+    <h1>Deploy + WireGuard</h1>
+    <p class="muted">Texto completo: <a href="../DEPLOY.md">DEPLOY.md</a></p>
+
+    <h2>Topologia site-to-site</h2>
+    <div class="mermaid">
+flowchart LR
+  subgraph vps [VPS]
+    WGs[WG_10_10_10_1]
+    NVR[NVR_go2rtc]
+    Store[StoreNginx]
+  end
+  subgraph home [Casa]
+    WGc[WG_10_10_10_2]
+    LAN[IfaceLAN_enp_or_wlx]
+    Cams[Cameras_192_168_1_x]
+  end
+  Internet((Internet))
+  User[Browser] --> Store
+  Store --> NVR
+  NVR -->|"RTSP 192.168.1.x"| WGs
+  WGs <-->|"UDP 51820"| WGc
+  WGc -->|"forward + MASQUERADE"| LAN
+  LAN --> Cams
+  User -.-> Internet
+  Internet -.-> Store
+    </div>
+
+    <h2>Path público</h2>
+    <div class="mermaid">
+flowchart TB
+  U[Browser_HTTPS] --> SN[nesterstore-nginx]
+  SN -->|"location /adm/house/monitor/"| GW[172_18_0_1_8090]
+  GW --> Edge[icsee-edge]
+  Edge --> App[icsee-nvr]
+  Edge --> RTC[icsee-go2rtc]
+    </div>
+
+    <h2>Checklist operacional</h2>
+    <ol>
+      <li>VPS: <code>wg show</code> com handshake recente; peer casa com <code>AllowedIPs</code> incluindo a LAN.</li>
+      <li>Casa: <code>ping 10.10.10.1</code>; <code>ip_forward=1</code>.</li>
+      <li>MASQUERADE na <strong>iface LAN ativa</strong> (Wi‑Fi <code>wlx…</code> ou cabo <code>enp2s0</code>) — se mudar a rede, atualize o <code>PostUp</code>.</li>
+      <li>VPS: <code>nc -vz &lt;ip-cam&gt; 554</code>.</li>
+      <li>Container: <code>GO2RTC_PUBLIC_URL=/adm/house/monitor/rtc</code>.</li>
+      <li>Nginx store reload após alterar o snippet.</li>
+    </ol>
+
+    <div class="card">
+      <strong>Recarregar WG em casa</strong>
+      <pre>sudo cp ~/.config/icsee-wg0-home.conf /etc/wireguard/wg0.conf
+sudo wg-quick down wg0
+sudo wg-quick up wg0</pre>
+    </div>
+
+    <h2>Artefatos</h2>
+    <table>
+      <thead><tr><th>Item</th><th>Onde</th></tr></thead>
+      <tbody>
+        <tr><td>Código VPS</td><td><code>/var/www/monitor</code></td></tr>
+        <tr><td>Snippet nginx</td><td><code>deploy/nginx/nestertec-monitor.conf</code></td></tr>
+        <tr><td>Templates WG</td><td><code>deploy/wireguard/</code></td></tr>
+        <tr><td>Conf casa (privado)</td><td><code>~/.config/icsee-wg0-home.conf</code></td></tr>
+      </tbody>
+    </table>
+
+    <footer>ICSEE NVR · <code>docs/html/fluxo-deploy.html</code></footer>
+  </div>
+</body>
+</html>

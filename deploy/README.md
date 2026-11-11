@@ -1,18 +1,35 @@
-# Deploy VPS — fase 1
+# Deploy VPS — resumo
 
-1. **WireGuard** — siga `wireguard/README.md` até `nc -vz 192.168.1.x 554` funcionar na VPS.  
-2. **Docker ICSEE** — copie o projeto, `.env` com segredos e:
+**Documentação completa:** [docs/DEPLOY.md](../docs/DEPLOY.md)  
+**Fluxo visual:** [docs/html/fluxo-deploy.html](../docs/html/fluxo-deploy.html)
 
-```env
-PUBLIC_BASE_PATH=/adm/house/monitor
-GO2RTC_PUBLIC_URL=/adm/house/monitor/rtc
-```
+| Item | Valor |
+|------|--------|
+| VPS | `root@191.252.208.229` |
+| Código | `/var/www/monitor` |
+| URL | https://www.nestertec.com.br/adm/house/monitor/ |
+| WG | VPS `10.10.10.1` ↔ sites `10.10.10.n` + VPN `10.20.n.0/24` (UDP `51820`) |
+
+## Snippets neste diretório
+
+- [nginx/nestertec-monitor.conf](nginx/nestertec-monitor.conf) — location no nginx do store
+- [wireguard/](wireguard/) — templates e notas curtas (detalhe em `docs/DEPLOY.md`)
+
+## Deploy via NesterConfigs
+
+1. Sync: `./scripts/deploy-producao.sh --remote` (ou rsync manual para `/var/www/monitor`)
+2. No painel: projeto **ICSEE NVR** → Deploy / Pipeline (roda o mesmo script **sem** `--remote` na VPS)
+
+## Ativar túnel em casa (sudo)
 
 ```bash
-docker compose up -d --build
+sudo cp ~/.config/icsee-wg0-home.conf /etc/wireguard/wg0.conf
+sudo chmod 600 /etc/wireguard/wg0.conf
+sudo systemctl enable --now wg-quick@wg0
+# ou: sudo wg-quick down wg0; sudo wg-quick up wg0
+ping -c2 10.10.10.1
 ```
 
-3. **Nginx** — inclua `nginx/nestertec-monitor.conf` no vhost de `nestertec.com` e recarregue o nginx.  
-4. Abra `https://nestertec.com/adm/house/monitor/` e faça login.
+Confirme MASQUERADE na **iface LAN ativa** (cabo ou Wi‑Fi). Ver checklist em `docs/DEPLOY.md`.
 
 PC de casa precisa permanecer ligado com o cliente WireGuard.

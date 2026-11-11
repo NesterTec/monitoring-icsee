@@ -13,7 +13,8 @@ import nvr.db as db_module
 from nvr.discover import guess_default_cidr, probe_rtsp_auth, scan_rtsp_hosts, tcp_open
 from nvr.go2rtc_sync import sync_go2rtc
 from nvr.health_logs import append_health_log
-from nvr.models import Camera
+from nvr.ipmap import vpn_to_lan
+from nvr.models import Camera, Site
 from nvr.notifications import clear_camera_lost
 from nvr.recorder import recorder_manager
 from nvr.security import decrypt_secret
@@ -100,8 +101,10 @@ def rediscover_camera(
     auth_first = auth_first_fn or first_auth_match
 
     cam.last_scan_at = now
+    site = db.get(Site, cam.site_id) if cam.site_id else None
+    scan_cidr = site.vpn_cidr if site and site.vpn_cidr else guess_default_cidr()
     try:
-        hosts = scan(guess_default_cidr(), port=cam.rtsp_port or 554)
+        hosts = scan(scan_cidr, port=cam.rtsp_port or 554)
     except ValueError as exc:
         logger.warning("rediscovery scan failed camera_id=%s: %s", cam.id, exc)
         db.commit()
@@ -126,6 +129,13 @@ def rediscover_camera(
     if match:
         old = cam.host
         cam.host = match
+        if site:
+            try:
+                cam.host_lan = vpn_to_lan(match, site.lan_cidr, site.vpn_cidr)
+            except ValueError:
+                cam.host_lan = match
+        else:
+            cam.host_lan = match
         cam.fail_count = 0
         cam.reachability_status = "ok"
         cam.last_seen_at = now

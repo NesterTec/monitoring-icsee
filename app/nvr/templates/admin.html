@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Superadmin</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+  {% if not wg_ready %}
+  <p class="error">Configure <code>WG_SERVER_PUBLIC_KEY</code> e <code>WG_SERVER_ENDPOINT</code> no .env da VPS para downloads de cliente funcionarem.</p>
+  {% endif %}
+
+  <h2>Novo usuário + localidade</h2>
+  <form method="post" action="{{ base_path|default('') }}/admin/users/create" class="form-narrow">
+    <label>E-mail</label>
+    <input name="email" type="email" required>
+    <label>Senha inicial</label>
+    <input name="password" type="password" required minlength="6">
+    <label>Nome da localidade</label>
+    <input name="site_name" placeholder="Casa do cliente">
+    <label>CIDR LAN</label>
+    <input name="lan_cidr" value="192.168.1.0/24">
+    <label>Iface LAN (hint no .conf)</label>
+    <input name="lan_iface" value="eth0">
+    <p style="margin-top:1rem"><button type="submit">Criar</button></p>
+  </form>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>Usuários</h2>
+  <table class="table">
+    <thead><tr><th>ID</th><th>E-mail</th><th>Papel</th><th>Nova senha</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.email }}</td>
+        <td>{{ u.role }}</td>
+        <td>
+          <form method="post" action="{{ base_path|default('') }}/admin/users/{{ u.id }}/password" class="row">
+            <input name="password" type="password" minlength="6" placeholder="nova senha" required>
+            <button type="submit" class="btn-secondary">Reset</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>Sites / peers WireGuard</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th><th>Nome</th><th>Owner</th><th>Túnel</th><th>VPN</th><th>LAN</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in sites %}
+      <tr>
+        <td>{{ s.id }}</td>
+        <td>{{ s.name }}</td>
+        <td>{{ s.owner_user_id }}</td>
+        <td><code>{{ s.tunnel_ip }}</code></td>
+        <td><code>{{ s.vpn_cidr }}</code></td>
+        <td><code>{{ s.lan_cidr }}</code></td>
+        <td class="row">
+          <a class="btn-secondary" href="{{ base_path|default('') }}/admin/sites/{{ s.id }}/client.conf">Cliente</a>
+          <a class="btn-secondary" href="{{ base_path|default('') }}/admin/sites/{{ s.id }}/server-peer.conf">Peer servidor</a>
+          <form method="post" action="{{ base_path|default('') }}/admin/sites/{{ s.id }}/provision">
+            <button type="submit" class="btn-secondary">Re-provisionar chaves</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

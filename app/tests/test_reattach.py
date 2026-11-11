@@ -64,7 +64,7 @@ def test_reattach_endpoint(auth_client, monkeypatch):
 
     monkeypatch.setattr(
         "nvr.routers.web.reattach_from_scanned_hosts",
-        lambda db, hosts, port=554: {
+        lambda db, hosts, port=554, **kwargs: {
             "updated": [
                 {
                     "camera_id": cam_id,

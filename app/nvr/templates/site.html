@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Localidade{% endblock %}
+{% block content %}
+<div class="card form-narrow">
+  <h1>Minha localidade</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+  {% if not site %}
+  <p class="muted">Nenhuma localidade associada a esta conta. Peça ao superadmin para provisionar um site.</p>
+  {% else %}
+  <p class="muted" style="margin-top:0">
+    Site <strong>{{ site.name }}</strong> · túnel <code>{{ site.tunnel_ip }}</code>
+    · VPN <code>{{ site.vpn_cidr }}</code> · LAN <code>{{ site.lan_cidr }}</code>
+  </p>
+
+  <form method="post" action="{{ base_path|default('') }}/site">
+    <label>Interface LAN (MASQUERADE / NETMAP)</label>
+    <input name="lan_iface" value="{{ site.lan_iface }}" placeholder="eth0 ou wlan0">
+    <label>CIDR da LAN em casa</label>
+    <input name="lan_cidr" value="{{ site.lan_cidr }}" placeholder="192.168.1.0/24">
+    <p style="margin-top:1rem"><button type="submit">Salvar</button></p>
+  </form>
+
+  <h2 style="margin-top:1.5rem">WireGuard</h2>
+  {% if not wg_ready %}
+  <p class="error">Servidor sem <code>WG_SERVER_PUBLIC_KEY</code> / <code>WG_SERVER_ENDPOINT</code> no .env — avise o superadmin.</p>
+  {% endif %}
+  <ol class="muted">
+    <li>Baixe o arquivo de configuração abaixo.</li>
+    <li><code>sudo cp … /etc/wireguard/wg0.conf && sudo chmod 600 /etc/wireguard/wg0.conf</code></li>
+    <li><code>sudo systemctl enable --now wg-quick@wg0</code></li>
+    <li>Confirme a iface LAN no arquivo se usar Wi‑Fi (<code>wlx…</code>).</li>
+    <li>Mantenha o PC/roteador ligado. Cadastre câmeras com o <strong>IP da LAN</strong>.</li>
+  </ol>
+  <p class="row">
+    <a class="btn" href="{{ base_path|default('') }}/site/wireguard.conf">Baixar WireGuard (.conf)</a>
+  </p>
+  <p class="muted">Chaves: {% if site.wg_public_key %}provisionadas{% else %}serão geradas no download{% endif %}.</p>
+  {% endif %}
+</div>
+{% endblock %}

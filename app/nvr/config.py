@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     disk_reserve_bytes: int = 2 * 1024**3
     segment_seconds: int = 300
     quota_gb: float = Field(default=50.0)
+    # WireGuard multi-site (VPS)
+    wg_server_public_key: str = ""
+    wg_server_endpoint: str = ""  # host:port e.g. 191.252.208.229:51820
+    wg_server_tunnel_ip: str = "10.10.10.1"
+    wg_tunnel_network: str = "10.10.10.0/24"
+    wg_vpn_base: str = "10.20.0.0/16"
+    wg_peers_dir: str = "/data/wireguard/peers"
+    wg_apply_cmd: str = ""  # optional host script path
 
 
 @lru_cache

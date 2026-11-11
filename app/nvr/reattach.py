@@ -5,7 +5,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from nvr.camera_monitor import first_auth_match
-from nvr.models import Camera
+from nvr.ipmap import vpn_to_lan
+from nvr.models import Camera, Site
 from nvr.notifications import clear_camera_lost
 from nvr.security import decrypt_secret
 
@@ -15,6 +16,7 @@ def reattach_from_scanned_hosts(
     hosts: list[str],
     port: int = 554,
     *,
+    site_ids: list[int] | None = None,
     auth_first_fn=None,
     now: datetime | None = None,
 ) -> dict:
@@ -25,10 +27,17 @@ def reattach_from_scanned_hosts(
     """
     now = now or datetime.now()
     auth_first = auth_first_fn or first_auth_match
-    cameras = db.query(Camera).order_by(Camera.id.asc()).all()
+    q = db.query(Camera).order_by(Camera.id.asc())
+    if site_ids is not None:
+        q = q.filter(Camera.site_id.in_(site_ids))
+    cameras = q.all()
     scanned = {h.strip() for h in hosts if h and h.strip()}
     registered = {c.host.strip() for c in cameras if c.host and c.host.strip()}
     free = [h for h in hosts if h.strip() and h.strip() not in registered]
+    sites = {
+        s.id: s
+        for s in db.query(Site).filter(Site.id.in_({c.site_id for c in cameras if c.site_id})).all()
+    }
 
     updated: list[dict] = []
     skipped: list[dict] = []
@@ -70,6 +79,14 @@ def reattach_from_scanned_hosts(
 
         old_host = cam.host
         cam.host = match
+        site = sites.get(cam.site_id) if cam.site_id else None
+        if site:
+            try:
+                cam.host_lan = vpn_to_lan(match, site.lan_cidr, site.vpn_cidr)
+            except ValueError:
+                cam.host_lan = match
+        else:
+            cam.host_lan = match
         cam.fail_count = 0
         cam.reachability_status = "ok"
         cam.last_seen_at = now
@@ -82,6 +99,7 @@ def reattach_from_scanned_hosts(
                 "name": cam.name,
                 "old_host": old_host,
                 "host": match,
+                "host_lan": cam.host_lan,
             }
         )
 

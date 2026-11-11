@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ICSEE NVR — Hub de documentação</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <span class="brand">ICSEE NVR</span>
+      <a href="index.html">Hub</a>
+      <a href="fluxo-live.html">Live</a>
+      <a href="fluxo-deploy.html">Deploy / WG</a>
+      <a href="fluxo-rediscovery.html">Rediscovery</a>
+    </nav>
+
+    <h1>Documentação visual</h1>
+    <p class="muted">
+      Fluxos do NVR (local e VPS). Textos editáveis em Markdown:
+      <span class="md-links">
+        <a href="../README.md">índice</a> ·
+        <a href="../MANUAL.md">manual</a> ·
+        <a href="../ARQUITETURA.md">arquitetura</a> ·
+        <a href="../DEPLOY.md">deploy</a>
+      </span>
+    </p>
+
+    <div class="grid">
+      <a class="card" href="fluxo-live.html">
+        <strong>Fluxo Live</strong>
+        Browser → nginx store → edge → go2rtc → RTSP das câmeras.
+      </a>
+      <a class="card" href="fluxo-deploy.html">
+        <strong>Deploy + WireGuard</strong>
+        Casa ↔ túnel ↔ VPS ↔ LAN das câmeras; path público.
+      </a>
+      <a class="card" href="fluxo-rediscovery.html">
+        <strong>Health / rediscovery</strong>
+        fail_count → lost → scan → reattach com credenciais salvas.
+      </a>
+    </div>
+
+    <h2>Visão geral</h2>
+    <div class="mermaid">
+flowchart TB
+  subgraph clients [Clientes]
+    Browser[Browser]
+  end
+  subgraph vps [VPS Nestertec]
+    StoreNginx[StoreNginx_443]
+    Edge[Edge_8090]
+    App[FastAPI_8080]
+    Go2rtc[go2rtc_1984]
+  end
+  subgraph home [Casa]
+    WGHome[WG_10_10_10_2]
+    Cams[Cameras_RTSP_554]
+  end
+  Browser --> StoreNginx
+  StoreNginx -->|"/adm/house/monitor/"| Edge
+  Edge -->|"/"| App
+  Edge -->|"/rtc/"| Go2rtc
+  Go2rtc -->|"RTSP via WG"| Cams
+  Go2rtc --- WGHome
+  WGHome --- Cams
+    </div>
+
+    <div class="card toc">
+      <strong>Manutenção</strong>
+      <ol>
+        <li>Mudou comportamento → edite o <code>.md</code> correspondente.</li>
+        <li>Mudou o fluxo → edite a página <code>fluxo-*.html</code> (diagrama Mermaid).</li>
+        <li>Não versionar segredos; use placeholders nos exemplos.</li>
+      </ol>
+    </div>
+
+    <h2>URLs de referência</h2>
+    <table>
+      <thead><tr><th>Contexto</th><th>URL</th></tr></thead>
+      <tbody>
+        <tr><td>Local</td><td><code>http://127.0.0.1:8090/</code></td></tr>
+        <tr><td>Produção</td><td><code>https://www.nestertec.com.br/adm/house/monitor/</code></td></tr>
+        <tr><td>Live iframe (VPS)</td><td><code>…/rtc/stream.html?src=cam_{id}</code></td></tr>
+      </tbody>
+    </table>
+
+    <footer>ICSEE NVR · hub HTML · <code>docs/html/index.html</code></footer>
+  </div>
+</body>
+</html>

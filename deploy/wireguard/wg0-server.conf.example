@@ -8,7 +8,7 @@ PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACC
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
 
 [Peer]
-# PC casa
-PublicKey = <HOME_PUBLIC_KEY>
-AllowedIPs = 10.10.10.2/32, 192.168.1.0/24
+# Site exemplo (um [Peer] por localidade — gerado no painel / apply-peer.sh)
+PublicKey = <SITE_PUBLIC_KEY>
+AllowedIPs = 10.10.10.2/32, 10.20.1.0/24
 PersistentKeepalive = 25

@@ -20,7 +20,11 @@
       <a href="{{ bp }}/cameras">Câmeras</a>
       <a href="{{ bp }}/recordings">Gravações</a>
       <a href="{{ bp }}/logs">Logs</a>
+      <a href="{{ bp }}/site">Localidade</a>
       <a href="{{ bp }}/settings">Configurações</a>
+      {% if is_superadmin|default(false) %}
+      <a href="{{ bp }}/admin">Admin</a>
+      {% endif %}
     </nav>
     <form class="logout-form" method="post" action="{{ bp }}/logout">
       <button class="btn-secondary" type="submit">Sair</button>

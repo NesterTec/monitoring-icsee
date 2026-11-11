@@ -68,6 +68,17 @@ def _migrate_sqlite(eng) -> None:
             conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN last_seen_at DATETIME")
         if "last_scan_at" not in cols:
             conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN last_scan_at DATETIME")
+        cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(cameras)").fetchall()}
+        if "site_id" not in cols:
+            conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN site_id INTEGER")
+        if "host_lan" not in cols:
+            conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN host_lan VARCHAR(255)")
+
+        user_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
+        if "role" not in user_cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT 'user'"
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

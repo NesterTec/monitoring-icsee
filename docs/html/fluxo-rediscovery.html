@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluxo Rediscovery — ICSEE NVR</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <span class="brand">ICSEE NVR</span>
+      <a href="index.html">Hub</a>
+      <a href="fluxo-live.html">Live</a>
+      <a href="fluxo-deploy.html">Deploy / WG</a>
+      <a href="fluxo-rediscovery.html">Rediscovery</a>
+    </nav>
+
+    <h1>Health / rediscovery</h1>
+    <p class="muted">
+      Monitoramento TCP das câmeras e reattach após DHCP.
+      Ver <a href="../MANUAL.md">MANUAL.md</a> e specs em <code>docs/superpowers/</code>.
+    </p>
+
+    <h2>Estados de reachability</h2>
+    <div class="mermaid">
+stateDiagram-v2
+  [*] --> ok
+  ok --> checking: probe_TCP_554
+  checking --> ok: success_reset_fail_count
+  checking --> checking: fail_count_lt_threshold
+  checking --> lost: fail_count_ge_threshold
+  lost --> scanning: auto_or_manual_scan
+  scanning --> ok: reattach_saved_creds
+  scanning --> lost: no_match
+  lost --> ok: manual_host_update
+    </div>
+
+    <h2>Fluxo de descoberta</h2>
+    <div class="mermaid">
+flowchart TD
+  Start[Admin_Descobrir_na_rede] --> Scan[Scan_CIDR_porta_554]
+  Scan --> Hosts[Lista_hosts_abertos]
+  Hosts --> Reattach[Reattach_logins_salvos]
+  Reattach --> Match{Auth_RTSP_OK?}
+  Match -->|sim| Update[Atualiza_host_camera]
+  Match -->|nao| Manual[Testar_login_manual]
+  Manual --> Match
+  Update --> Sync[go2rtc_sync]
+  Sync --> Live[Live_volta]
+    </div>
+
+    <h2>O que o monitor faz</h2>
+    <ol>
+      <li>Periodicamente testa TCP no <code>host:rtsp_port</code> de cada câmera habilitada.</li>
+      <li>Sucesso → <code>reachability_status=ok</code>, zera <code>fail_count</code>, atualiza <code>last_seen_at</code>.</li>
+      <li>Falha → incrementa <code>fail_count</code>; após o limiar → <code>lost</code> + entrada em Logs.</li>
+      <li>UI de Logs mostra os eventos recentes (sem modal/sino).</li>
+    </ol>
+
+    <div class="card">
+      <strong>Armadilhas</strong>
+      <ul>
+        <li>App ICSEE no celular (nuvem) ≠ RTSP na LAN.</li>
+        <li>Dois IPs com o mesmo MAC podem ser a mesma câmera (alias) — não assumir rediscovery.</li>
+        <li>Scan na VPS só encontra hosts se o WireGuard + MASQUERADE estiverem corretos.</li>
+      </ul>
+    </div>
+
+    <footer>ICSEE NVR · <code>docs/html/fluxo-rediscovery.html</code></footer>
+  </div>
+</body>
+</html>

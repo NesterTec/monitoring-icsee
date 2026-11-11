@@ -49,10 +49,15 @@ def _prune(db: Session) -> None:
     db.commit()
 
 
-def list_recent(db: Session, limit: int = 200) -> list[HealthLog]:
-    return (
-        db.query(HealthLog)
-        .order_by(HealthLog.id.desc())
-        .limit(limit)
-        .all()
-    )
+def list_recent(
+    db: Session,
+    limit: int = 200,
+    *,
+    camera_ids: list[int] | None = None,
+) -> list[HealthLog]:
+    q = db.query(HealthLog)
+    if camera_ids is not None:
+        if not camera_ids:
+            return []
+        q = q.filter(HealthLog.camera_id.in_(camera_ids))
+    return q.order_by(HealthLog.id.desc()).limit(limit).all()
