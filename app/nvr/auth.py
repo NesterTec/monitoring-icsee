@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from nvr.config import get_settings
 from nvr.db import get_db
+from nvr.oidc import require_user_redirect
 from nvr.models import ROLE_SUPERADMIN, ROLE_USER, Camera, Site, User
 from nvr.security import hash_password, verify_password
 from nvr.wireguard_provision import allocate_tunnel_ip, allocate_vpn_cidr
@@ -81,10 +82,12 @@ def authenticate(db: Session, email: str, password: str) -> User | None:
 
 def require_user(request: Request, db: Session = Depends(get_db)) -> User:
     user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = db.get(User, user_id)
+    user = db.get(User, user_id) if user_id else None
     if user is None:
+        # SSO_REQUIRED: navegação HTML segue para o OIDC; demais chamadas mantêm 401.
+        redirect = require_user_redirect(request)
+        if redirect is not None:
+            raise redirect
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 

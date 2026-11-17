@@ -16,6 +16,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(32), default=ROLE_USER, index=True)
+    oidc_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
 
     sites: Mapped[list["Site"]] = relationship(back_populates="owner")
 

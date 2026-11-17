@@ -24,6 +24,13 @@ from nvr.db import get_db
 from nvr.camera_monitor import rediscover_camera
 from nvr.discover import auth_probe_hosts, guess_default_cidr, probe_rtsp_auth, scan_rtsp_hosts
 from nvr.go2rtc_sync import sync_go2rtc
+from nvr.oidc import (
+    OidcError,
+    build_authorization_url,
+    complete_login,
+    oidc_enabled,
+    sso_required,
+)
 from nvr.ipmap import lan_to_vpn, vpn_to_lan
 from nvr.models import Camera, RecordingSegment, Site, User
 from nvr.health_logs import list_recent
@@ -85,7 +92,7 @@ def _user_or_redirect(request: Request, db: Session) -> User | RedirectResponse:
     try:
         return require_user(request, db)
     except HTTPException:
-        return _redirect("/login")
+        return _redirect("/auth/oidc/login" if sso_required() else "/login")
 
 
 def _site_default_cidr(db: Session, user: User) -> str:
@@ -110,7 +117,33 @@ def _resolve_hosts_for_site(site: Site, lan_or_host: str) -> tuple[str, str]:
 
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    return _tpl(request, "login.html", {"error": None})
+    if sso_required():
+        return _redirect("/auth/oidc/login")
+    return _tpl(request, "login.html", {"error": None, "sso_enabled": oidc_enabled()})
+
+
+@router.get("/auth/oidc/login")
+def oidc_login(request: Request):
+    try:
+        url = build_authorization_url(request)
+    except OidcError as exc:
+        return _tpl(request, "login.html", {"error": str(exc), "sso_enabled": False}, status_code=503)
+    return RedirectResponse(url, status_code=303)
+
+
+@router.get("/auth/oidc/callback")
+def oidc_callback(request: Request, db: Session = Depends(get_db)):
+    try:
+        complete_login(request, db)
+    except OidcError as exc:
+        # Sem formulário de senha quando SSO_REQUIRED, para não gerar loop de redirect.
+        return _tpl(
+            request,
+            "login.html",
+            {"error": str(exc), "sso_enabled": oidc_enabled(), "sso_only": sso_required()},
+            status_code=403,
+        )
+    return _redirect("/")
 
 
 @router.post("/login")
@@ -120,13 +153,15 @@ def login(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    if sso_required():
+        return _redirect("/auth/oidc/login")
     seed_admin(db)
     user = authenticate(db, email.strip(), password)
     if user is None:
         return _tpl(
             request,
             "login.html",
-            {"error": "E-mail ou senha inválidos"},
+            {"error": "E-mail ou senha inválidos", "sso_enabled": oidc_enabled()},
             status_code=401,
         )
     request.session["user_id"] = user.id

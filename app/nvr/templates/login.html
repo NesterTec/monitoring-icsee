@@ -4,6 +4,7 @@
 <div class="login-wrap card">
   <h1>Login</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if not sso_only %}
   <form method="post" action="{{ base_path|default('') }}/login">
     <label>E-mail</label>
     <input type="email" name="email" required autocomplete="username">
@@ -11,5 +12,9 @@
     <input type="password" name="password" required autocomplete="current-password">
     <p style="margin-top:1rem"><button type="submit">Entrar</button></p>
   </form>
+  {% endif %}
+  {% if sso_enabled %}
+  <p style="margin-top:1rem"><a href="{{ base_path|default('') }}/auth/oidc/login">Entrar com SSO Nestertec</a></p>
+  {% endif %}
 </div>
 {% endblock %}

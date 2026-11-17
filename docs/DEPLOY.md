@@ -159,3 +159,12 @@ ls -la /tmp/t.mp4
 ## Atualizar este doc
 
 Mudou IP da VPS, path público, rede Docker ou procedimento WG → edite aqui e [html/fluxo-deploy.html](html/fluxo-deploy.html). Mantenha `deploy/README.md` como resumo curto.
+
+## SSO (OIDC)
+
+Login via NesterAdmin (Authorization Code + PKCE, tokens validados por JWKS com PyJWT).
+
+- Env (`.env`, ver `.env.example`): `OIDC_ISSUER`, `OIDC_CLIENT_ID=icsee`, `OIDC_CLIENT_SECRET` (nunca no git), `OIDC_REDIRECT_URI=https://www.nestertec.com.br/adm/house/monitor/auth/oidc/callback`, `SSO_REQUIRED`.
+- Rotas do app: `GET /auth/oidc/login` e `GET /auth/oidc/callback` (nginx remove o prefixo `/adm/house/monitor`; `PUBLIC_BASE_PATH` o recoloca nos redirects).
+- O e-mail do ID token precisa corresponder a um usuário local (`users.email`); o `sub` fica em `users.oidc_sub` (coluna criada automaticamente no SQLite). Não há auto-cadastro.
+- `SSO_REQUIRED=false` (padrão): botão "Entrar com SSO Nestertec" em `/login`. `SSO_REQUIRED=true`: `/login`, `require_user` e páginas protegidas redirecionam ao SSO (APIs/JSON seguem com 401).

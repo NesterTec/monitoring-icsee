@@ -79,6 +79,11 @@ def _migrate_sqlite(eng) -> None:
             conn.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT 'user'"
             )
+        if "oidc_sub" not in user_cols:
+            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN oidc_sub VARCHAR(255)")
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_oidc_sub ON users (oidc_sub)"
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     go2rtc_public_url: str = "http://127.0.0.1:1984"
     # When behind a reverse proxy path, e.g. "/adm/house/monitor"
     public_base_path: str = ""
+    # OIDC SSO (NesterAdmin). Client secret only via .env — never commit.
+    oidc_issuer: str = ""
+    oidc_client_id: str = "icsee"
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    oidc_scopes: str = "openid email profile"
+    sso_required: bool = False
     disk_reserve_bytes: int = 2 * 1024**3
     segment_seconds: int = 300
     quota_gb: float = Field(default=50.0)
